@@ -407,6 +407,8 @@ def generate_ground_truth_comparison(df):
     emdat_zone_villages = df[df['emdat_disaster_zone'] == True]
     print(f"Villages in EM-DAT disaster zone: {len(emdat_zone_villages):,}")
 
+    correctly_flagged = 0
+    missed = 0
     if len(emdat_zone_villages) > 0:
         # Of villages in disaster zones, how many did the model flag?
         correctly_flagged = (emdat_zone_villages['model_risk_zone'].isin(['RED', 'ORANGE'])).sum()
@@ -427,8 +429,8 @@ def generate_ground_truth_comparison(df):
     return {
         'total_emdat_events': len(ne_emdat),
         'villages_in_emdat_zone': len(emdat_zone_villages),
-        'correctly_flagged': correctly_flagged if len(emdat_zone_villages) > 0 else 0,
-        'missed': missed if len(emdat_zone_villages) > 0 else 0,
+        'correctly_flagged': correctly_flagged,
+        'missed': missed,
     }
 
 

@@ -170,13 +170,22 @@ def compute_distance_to_features(villages_gdf, features_gdf, feature_type="featu
         # Point features (hospitals, schools)
         feature_coords = np.array(list(zip(features_gdf.geometry.x, features_gdf.geometry.y)))
     
-    # Build KDTree and query
-    tree = cKDTree(feature_coords)
-    distances, _ = tree.query(village_coords, k=1)
+    # Convert degrees to approximate kilometers
+    # For NE India (~25N): 1° latitude ~ 111 km, 1° longitude ~ 111 * cos(25°) ~ 100.6 km
+    # Use latitude-aware conversion for better accuracy
+    mean_lat_rad = np.radians(villages_gdf.geometry.y.mean())
+    cos_lat = np.cos(mean_lat_rad)
     
-    # Convert degrees to approximate kilometers (1 degree ~ 111 km at equator)
-    # For NE India (~25N), 1 degree latitude ~ 111 km, 1 degree longitude ~ 100 km
-    distances_km = distances * 111  # Rough approximation
+    # Scale coordinates for accurate distance computation
+    village_xy = village_coords.copy()
+    village_xy[:, 0] *= cos_lat  # scale longitude
+    feature_xy = feature_coords.copy()
+    feature_xy[:, 0] *= cos_lat  # scale longitude
+    
+    # Build KDTree on scaled coordinates and query
+    tree = cKDTree(feature_xy)
+    distances_scaled, _ = tree.query(village_xy, k=1)
+    distances_km = distances_scaled * 111  # now in km
     
     return distances_km
 
@@ -323,22 +332,32 @@ def extract_landslide_features(villages_df):
     
     village_coords = np.array(list(zip(villages_gdf.geometry.x, villages_gdf.geometry.y)))
     
-    # Build KDTree
+    # Latitude-aware distance conversion for NE India (~25°N)
+    mean_lat_rad = np.radians(np.mean(village_coords[:, 1]))
+    cos_lat = np.cos(mean_lat_rad)
+    
+    # Scale coordinates for accurate distance computation
+    village_xy = village_coords.copy()
+    village_xy[:, 0] *= cos_lat  # scale longitude
+    ls_xy = landslide_coords.copy()
+    ls_xy[:, 0] *= cos_lat
+    
+    # Build KDTree on scaled coordinates
     print("  Building spatial index...")
-    tree = cKDTree(landslide_coords)
+    tree = cKDTree(ls_xy)
     
     # Find nearest landslide for each village
     print("  Computing distance to nearest landslide...")
-    distances, indices = tree.query(village_coords, k=1)
-    distances_km = distances * 111  # Convert degrees to km (rough)
+    distances, indices = tree.query(village_xy, k=1)
+    distances_km = distances * 111  # now in km
     
     # Compute density (landslides within radius)
     print("  Computing landslide density...")
-    radius_50km = 50 / 111  # Convert km to degrees (~0.45)
-    radius_100km = 100 / 111  # ~0.90
+    radius_50km = 50 / 111  # in scaled degrees
+    radius_100km = 100 / 111
     
-    density_50km = tree.query_ball_point(village_coords, r=radius_50km)
-    density_100km = tree.query_ball_point(village_coords, r=radius_100km)
+    density_50km = tree.query_ball_point(village_xy, r=radius_50km)
+    density_100km = tree.query_ball_point(village_xy, r=radius_100km)
     
     villages_df = villages_df.copy()
     villages_df['dist_to_nearest_landslide_km'] = distances_km

@@ -13,32 +13,33 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | Metric | Value |
 |--------|-------|
 | Villages Assessed | **43,996** across 7 states |
-| Model AUC-ROC | **99.8%** |
-| Model Recall | **97.4%** |
-| Model Precision | **98.4%** |
-| EM-DAT Ground Truth Validation | **98.9%** detection rate |
-| CRITICAL Priority Villages | **4,400** |
-| IDEAL Relocation Sites | **236** |
+| Model AUC-ROC | **99.94%** |
+| Model Recall | **98.9%** |
+| Model Precision | **99.3%** |
+| EM-DAT Ground Truth Validation | **99.9%** detection rate |
+| HIGH Priority Villages | **13,199** (30%) |
+| Features Used | **66** (60 original + 6 flood) |
+| Model Version | **v1.0** |
 
 ### Risk Zone Distribution
 
 | Zone | Villages | Percentage | Description |
 |------|----------|------------|-------------|
-| 🔴 RED | 23,452 | 53.3% | High hazard — immediate relocation needed |
-| 🟠 ORANGE | 1,054 | 2.4% | Medium hazard — monitor and plan |
-| 🟢 GREEN | 19,490 | 44.3% | Low hazard — safe for habitation |
+| 🔴 RED | 22,739 | 51.7% | High hazard — immediate relocation needed |
+| 🟠 ORANGE | 15,048 | 34.2% | Medium hazard — monitor and plan |
+| 🟢 GREEN | 6,209 | 14.1% | Low hazard — safe for habitation |
 
 ### Risk by State
 
 | State | Total Villages | RED Zone | RED % |
 |-------|---------------|----------|-------|
-| Mizoram | 830 | 803 | 96.7% |
-| Nagaland | 1,428 | 1,360 | 95.2% |
-| Manipur | 2,581 | 2,411 | 93.4% |
-| Meghalaya | 6,839 | 4,526 | 66.2% |
-| Arunachal Pradesh | 5,589 | 3,212 | 57.5% |
-| Assam | 25,854 | 10,919 | 42.2% |
-| Tripura | 875 | 221 | 25.3% |
+| Mizoram | 830 | 804 | 96.9% |
+| Nagaland | 1,428 | 1,361 | 95.3% |
+| Manipur | 2,581 | 2,424 | 93.9% |
+| Meghalaya | 6,839 | 4,548 | 66.5% |
+| Arunachal Pradesh | 5,589 | 3,247 | 58.1% |
+| Assam | 25,854 | 10,135 | 39.2% |
+| Tripura | 875 | 223 | 25.5% |
 
 ---
 
@@ -55,7 +56,6 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | `colsample_bytree` | 0.8 |
 | `reg_alpha` | 1.0 |
 | `reg_lambda` | 1.0 |
-| `scale_pos_weight` | 0.819 (class imbalance adjustment) |
 | `early_stopping_rounds` | 50 |
 | `objective` | `binary:logistic` |
 | `eval_metric` | `auc` |
@@ -65,22 +65,22 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 - **Algorithm:** XGBoost (Extreme Gradient Boosting)
 - **Task:** Binary classification — predict whether a village is in a hazard Red Zone
 - **Training samples:** 43,996 villages
-- **Features used:** 60 (selected from 430+ via feature importance analysis)
+- **Features used:** 66 (selected from 430+ via feature importance analysis)
 - **Validation:** 5-fold Stratified Cross-Validation
-- **Threshold:** 0.5 (probability > 0.5 → RED zone)
-- **Risk zones:** RED (>0.7), ORANGE (0.3–0.7), GREEN (<0.3)
+- **Risk zones:** RED (≥0.7), ORANGE (0.4–0.7), GREEN (<0.4)
+- **Label sources:** GSI landslide inventory + EM-DAT historical disasters + DFO flood database
 
 ### Cross-Validation Results
 
 | Fold | Accuracy | AUC-ROC | Recall | Precision | F1-Score |
 |------|----------|---------|--------|-----------|----------|
-| 1 | 97.73% | 0.9980 | 97.66% | 98.18% | 97.92% |
-| 2 | 97.91% | 0.9979 | 97.47% | 98.70% | 98.08% |
-| 3 | 97.69% | 0.9980 | 97.26% | 98.51% | 97.88% |
-| 4 | 97.45% | 0.9977 | 97.09% | 98.24% | 97.66% |
-| 5 | 97.73% | 0.9980 | 97.39% | 98.48% | 97.93% |
-| **Mean** | **97.70%** | **0.9979** | **97.37%** | **98.41%** | **97.89%** |
-| Std | ±0.17% | ±0.0002 | ±0.22% | ±0.27% | ±0.16% |
+| 1 | 98.81% | 0.9995 | 98.98% | 99.26% | 99.12% |
+| 2 | 98.78% | 0.9993 | 98.98% | 99.23% | 99.10% |
+| 3 | 98.92% | 0.9994 | 99.05% | 99.36% | 99.20% |
+| 4 | 98.84% | 0.9994 | 98.83% | 99.46% | 99.14% |
+| 5 | 98.81% | 0.9995 | 98.86% | 99.38% | 99.12% |
+| **Mean** | **98.83%** | **0.9994** | **98.94%** | **99.34%** | **99.14%** |
+| Std | ±0.05% | ±0.0001 | ±0.09% | ±0.09% | ±0.04% |
 
 ### Why XGBoost?
 
@@ -94,27 +94,27 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 
 ## 🔬 Feature Engineering
 
-### 60 Features Used by the Model (ranked by SHAP importance)
+### 66 Features Used by the Model (ranked by SHAP importance)
 
-| Rank | Feature | SHAP Value | Source | Description |
-|------|---------|-----------|--------|-------------|
-| 1 | `dist_to_nearest_landslide_km` | 5.104 | GSI | Distance to nearest recorded landslide |
-| 2 | `mean_daily_rainfall_mm` | 0.547 | IMD | Average daily rainfall over 5 years |
-| 3 | `landslide_density_100km` | 0.390 | GSI | Number of landslides within 100km radius |
-| 4 | `landslide_density_50km` | 0.377 | GSI | Number of landslides within 50km radius |
-| 5 | `elevation_m` | 0.340 | SRTM DEM | Village elevation in meters |
-| 6 | `max_daily_rainfall_mm` | 0.315 | IMD | Maximum single-day rainfall in 5 years |
-| 7 | `dist_to_nearest_school_km` | 0.297 | OSM | Distance to nearest school |
-| 8 | `rainfall_90th_percentile_mm` | 0.271 | IMD | 90th percentile daily rainfall |
-| 9 | `rain_days_per_year` | 0.238 | IMD | Number of rainy days per year |
-| 10 | `Total Geographical Area` | 0.177 | Census | Village area in hectares |
-| 11 | `road_density_5km` | 0.170 | OSM | Road length within 5km buffer |
-| 12 | `dist_to_nearest_hospital_km` | 0.164 | OSM | Distance to nearest hospital |
-| 13 | `rainfall_95th_percentile_mm` | 0.133 | IMD | 95th percentile daily rainfall |
-| 14 | `Total Population of Village` | 0.067 | Census | Total village population |
-| 15 | `Power Supply Domestic Winter` | 0.059 | Census | Hours of domestic power in winter |
+| Rank | Feature | Source | Description |
+|------|---------|--------|-------------|
+| 1 | `dist_to_nearest_landslide_km` | GSI | Distance to nearest recorded landslide |
+| 2 | `dist_to_nearest_flood_km` | DFO | Distance to nearest historical flood |
+| 3 | `landslide_density_100km` | GSI | Number of landslides within 100km radius |
+| 4 | `landslide_density_50km` | GSI | Number of landslides within 50km radius |
+| 5 | `rainfall_90th_percentile_mm` | IMD | 90th percentile daily rainfall |
+| 6 | `flood_density_50km` | DFO | Number of flood events within 50km |
+| 7 | `elevation_m` | SRTM DEM | Village elevation in meters |
+| 8 | `max_daily_rainfall_mm` | IMD | Maximum single-day rainfall in 5 years |
+| 9 | `flood_density_100km` | DFO | Number of flood events within 100km |
+| 10 | `mean_daily_rainfall_mm` | IMD | Average daily rainfall over 5 years |
+| 11 | `flood_proxy_score` | Derived | Combined flood risk: low elevation + flat + near river + high rainfall |
+| 12 | `dist_to_nearest_school_km` | OSM | Distance to nearest school |
+| 13 | `slope_degrees` | SRTM DEM | Terrain slope in degrees |
+| 14 | `rain_days_per_year` | IMD | Number of rainy days per year |
+| 15 | `road_density_5km` | OSM | Road length within 5km buffer |
 
-*Plus 45 more Census infrastructure features (water sources, roads, health facilities, land use).*
+*Plus 51 more features (terrain, rainfall, infrastructure, Census data).*
 
 ### Feature Categories
 
@@ -123,6 +123,7 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | **Terrain** | 3 | Elevation, slope, terrain roughness |
 | **Rainfall** | 5 | Max, mean, 90th/95th percentile, rain days |
 | **Landslide Proximity** | 3 | Distance to nearest, density 50km, density 100km |
+| **Flood Features** | 6 | Distance to flood, flood density 50/100km, proxy score, is_lowland, near_major_river |
 | **Infrastructure** | 5 | Distance to roads, rivers, hospitals, schools, road density |
 | **Water Sources** | 18 | Tap water, wells, hand pumps, springs, tube wells |
 | **Power Supply** | 12 | Domestic, agriculture, commercial — summer/winter hours |
@@ -185,6 +186,13 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 - **Content:** NE India PBF file (105 MB) — roads, buildings, waterways, amenities
 - **Derived features:** Distance to nearest road/river/hospital/school, road density within 5km
 
+### 9. DFO Global Flood Database
+- **Source:** Dartmouth Flood Observatory (Zenodo)
+- **Content:** 5,503 global flood event records with polygon geometries
+- **NE India records:** 274 flood events (1985–2023)
+- **Usage:** Label source — villages in high-density flood zones = high risk
+- **Derived features:** Flood density 50/100km, distance to nearest flood, flood proxy score
+
 ---
 
 ## 🔄 Pipeline Overview
@@ -203,6 +211,7 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 │  WorldCover → land cover class                                  │
 │  OSM → distances to infrastructure                              │
 │  GSI → landslide proximity & density                            │
+│  DFO → flood proximity & density                                │
 │  Census → infrastructure features                               │
 │  Output: ne_india_village_features.csv (43,996 × 430)          │
 └──────────────────────────┬──────────────────────────────────────┘
@@ -210,14 +219,15 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                    PHASE 2: LABEL CREATION                      │
 │  GSI landslides (10km buffer) + EM-DAT (15km buffer)           │
+│  + DFO flood zones (high-density areas)                        │
 │  → Binary: high_risk = 1 (disaster zone) / 0 (safe)            │
 │  → Multiclass: RED / ORANGE / GREEN                             │
-│  Output: 54.8% positive, 45.2% negative                        │
+│  Output: 68.0% positive, 32.0% negative                        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                   PHASE 3: MODEL TRAINING                       │
-│  Feature selection (60 from 430+) via importance ranking        │
+│  Feature selection (66 from 430+) via importance ranking        │
 │  XGBoost Classifier with 5-fold stratified CV                   │
 │  SHAP explainability for every prediction                       │
 │  Output: trained model (1.9 MB), metrics, SHAP plots            │
@@ -226,9 +236,9 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 ┌──────────────────────────▼──────────────────────────────────────┐
 │               PHASE 4: PRIORITIZATION & VISUALIZATION           │
 │  Priority scoring: risk_score × population_vulnerability        │
-│  → CRITICAL / HIGH / MEDIUM / LOW relocation priority           │
-│  → Interactive Folium map with color-coded villages             │
-│  Output: risk map (HTML), ranked CSV, state reports             │
+│  → HIGH / MEDIUM / LOW relocation priority                      │
+│  → Per-village output with SHAP explanations                    │
+│  Output: prediction_output.csv (14 columns per village)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -255,6 +265,7 @@ Download the following into `data/raw/`:
 | EM-DAT | ~2 MB | https://public.emdat.be |
 | ESA WorldCover | ~1.1 GB | ESA WorldCover Portal |
 | OSM PBF | ~105 MB | Geofabrik Download Server |
+| DFO Flood Database | ~50 MB | Zenodo (Dartmouth Flood Observatory) |
 
 ### 2. Run the Pipeline
 
@@ -265,10 +276,12 @@ python scripts/join_census_shrug.py
 # Phase 1: Extract spatial features
 python scripts/extract_raster_features.py
 python scripts/extract_vector_features.py
+python scripts/extract_flood_features.py
 python scripts/combine_features.py
 
 # Phase 2: Create labels
 python scripts/create_labels.py
+python scripts/update_labels_flood.py
 
 # Phase 3: Train model
 python scripts/train_model.py
@@ -305,57 +318,56 @@ SIH2026/
 ├── README.md                          # This file
 ├── .gitignore                         # Excludes raw data (5.6 GB)
 │
-├── scripts/                           # Pipeline scripts (3,248 lines)
+├── scripts/                           # Pipeline scripts
 │   ├── join_census_shrug.py           # Phase 0: Census + SHRUG coordinate join
 │   ├── extract_raster_features.py     # Phase 1: SRTM + WorldCover extraction
 │   ├── extract_vector_features.py     # Phase 1: OSM + Landslide distances
+│   ├── extract_flood_features.py      # Phase 1: DFO flood feature extraction
 │   ├── combine_features.py            # Phase 1: Merge all features
 │   ├── create_labels.py               # Phase 2: Binary + multiclass labels
+│   ├── update_labels_flood.py         # Phase 2: Add DFO flood zones as label source
 │   ├── train_model.py                 # Phase 3: XGBoost + SHAP training
-│   ├── phase4_visualization.py        # Phase 4: Maps + prioritization
+│   ├── phase4_visualization.py        # Phase 4: Prioritization + reports
 │   └── predict.py                     # Standalone prediction script
 │
 ├── models/                            # Trained model artifacts
 │   ├── red_zone_xgboost.json          # Trained XGBoost model (1.9 MB)
 │   ├── model_metadata.json            # Hyperparameters, metrics, features
-│   ├── feature_importance.csv         # 60 features ranked by SHAP
+│   ├── feature_importance.csv         # 66 features ranked by SHAP
 │   ├── cv_scores.csv                  # 5-fold CV metrics
 │   ├── features.json                  # Feature list
 │   ├── model_evaluation.png           # Confusion matrix, ROC, PR curves
 │   └── shap_summary.png              # SHAP feature importance plot
 │
 ├── tests/                             # End-to-end validation
-│   ├── test_pipeline.py               # 115 assertions across 10 categories
-│   └── validate_predictions.py        # EM-DAT, GSI, domain knowledge checks
+│   ├── test_pipeline.py               # 159 assertions across 12 categories
+│   ├── validate_predictions.py        # EM-DAT, GSI, domain knowledge checks
+│   └── validate_real_world.py         # Ground truth validation against real disasters
 │
 ├── data/
 │   ├── raw/                           # Raw datasets (gitignored, ~5.6 GB)
 │   │   ├── census/                    # Census 2011 xlsx files
+│   │   ├── shrug/                     # SHRUG village polygons
 │   │   ├── srtm/                      # SRTM DEM tiles
 │   │   ├── imd_rainfall/              # IMD NetCDF files
 │   │   ├── gsi_landslide/             # GSI landslide shapefiles
 │   │   ├── emdat/                     # EM-DAT Excel
 │   │   ├── worldcover/                # ESA WorldCover GeoTIFFs
-│   │   ├── osm/                       # OpenStreetMap PBF
-│   │   └── shrug/                     # SHRUG village polygons
+│   │   ├── openstreetmap/             # OpenStreetMap PBF
+│   │   └── floods/                    # DFO Global Flood Database
 │   │
 │   └── processed/                     # Generated data (gitignored)
 │       ├── ne_india_census_with_coords.csv  # Census + SHRUG join
 │       ├── ne_india_village_features.csv     # Full feature matrix
 │       ├── village_risk_labels.csv           # Binary + multiclass labels
-│       ├── village_srtm_wc_features.csv      # SRTM + WorldCover
-│       ├── village_rainfall_features.csv     # IMD rainfall stats
-│       ├── village_osm_features.csv          # OSM distances
-│       ├── village_vector_features.csv       # Hospital/school/landslide
-│       ├── reports/                          # Generated reports
-│       └── maps/                             # Interactive HTML maps
+│       └── prediction_output.csv             # Final prediction output
 ```
 
 ---
 
 ## 🧪 Testing & Validation
 
-### End-to-End Tests (115 assertions)
+### End-to-End Tests (159 assertions)
 
 | Test Category | Assertions | Status |
 |---------------|-----------|--------|
@@ -366,27 +378,32 @@ SIH2026/
 | Prioritization | 7 | ✅ |
 | Green Zone | 7 | ✅ |
 | Model Artifacts | 13 | ✅ |
-| Map/Report Files | 17 | ✅ |
 | Model Load+Predict | 5 | ✅ |
 | CV Consistency | 6 | ✅ |
+| Prediction Output Fields | 31 | ✅ |
+| Bug Fix Regression | 12 | ✅ |
 
 Run tests:
 ```bash
 python tests/test_pipeline.py
 python tests/validate_predictions.py
+python tests/validate_real_world.py
 ```
 
 ### Ground Truth Validation
 
 | Validation Method | Result |
 |-------------------|--------|
-| EM-DAT disaster zones → RED/ORANGE | **98.9%** detected |
+| EM-DAT disaster zones → RED/ORANGE | **99.9%** detected |
 | GSI landslide clusters → state ranking | **Perfect correlation** |
 | Hill states vs Plains states RED% | **71.3% vs 41.7%** (correct) |
 | Villages within 5km of landslide | **100% flagged RED** |
 | Villages >50km from landslides, low density | **81.6% flagged GREEN** |
-| Mizoram (most landslide-prone) | **96.7% RED** |
-| Assam (flatter Brahmaputra valley) | **42.2% RED** |
+| Mizoram (most landslide-prone) | **96.9% RED** |
+| Assam (flatter Brahmaputra valley) | **39.2% RED** |
+| Dhemaji (flood district) | **94% RED** ✅ |
+| Dibrugarh (flood district) | **54% RED** ✅ |
+| Sivasagar (flood district) | **40% RED** ✅ |
 
 ---
 
@@ -397,20 +414,22 @@ python tests/validate_predictions.py
 Villages are labeled as **high_risk = 1** if they fall within:
 - **10 km buffer** around any of 30,842 GSI landslide points
 - **15 km buffer** around any of 124 EM-DAT historical disaster locations in NE India
+- **High-density DFO flood zones** (areas with multiple historical flood events)
 
 This creates a binary classification problem: **disaster-affected (1) vs safe (0)**.
 
 ### Feature Extraction
 
-For each village, 60 features are computed:
+For each village, 66 features are computed:
 1. **Raster sampling** — Elevation from SRTM, land cover from WorldCover, rainfall from IMD
 2. **Spatial joins** — Distance to nearest landslide, road, river, hospital, school using KDTree
 3. **Buffer analysis** — Landslide density within 50km and 100km radii
-4. **Census columns** — Water sources, power supply, roads, population
+4. **Flood analysis** — DFO flood proximity, density, and proxy score
+5. **Census columns** — Water sources, power supply, roads, population
 
 ### Model Training
 
-- XGBoost trained on 60 selected features
+- XGBoost trained on 66 selected features
 - 5-fold stratified cross-validation for robust evaluation
 - Early stopping prevents overfitting
 - SHAP values computed for explainability
@@ -418,16 +437,15 @@ For each village, 60 features are computed:
 ### Risk Scoring
 
 Each village gets a **risk_score** (0.0–1.0):
-- **RED zone:** score > 0.7 → high hazard, immediate relocation needed
-- **ORANGE zone:** 0.3 < score ≤ 0.7 → medium hazard, monitor and plan
-- **GREEN zone:** score ≤ 0.3 → low hazard, safe for habitation
+- **RED zone:** score ≥ 0.7 → high hazard, immediate relocation needed
+- **ORANGE zone:** 0.4 ≤ score < 0.7 → medium hazard, monitor and plan
+- **GREEN zone:** score < 0.4 → low hazard, safe for habitation
 
 ### Prioritization
 
 Villages are ranked by **priority_score = risk_score × vulnerability_multiplier**:
-- **CRITICAL:** Top 10% — immediate relocation
-- **HIGH:** Next 20% — short-term action
-- **MEDIUM:** Next 30% — monitoring and planning
+- **HIGH:** Top 30% — short-term action
+- **MEDIUM:** Middle 30% — monitoring and planning
 - **LOW:** Bottom 40% — routine monitoring
 
 ---
@@ -437,11 +455,11 @@ Villages are ranked by **priority_score = risk_score × vulnerability_multiplier
 The model uses **SHAP (SHapley Additive exPlanations)** to explain every prediction:
 
 **Global explanation** — Top risk factors across all villages:
-1. **Distance to nearest landslide** (10x more important than any other feature)
-2. **Mean daily rainfall** — heavy monsoon rainfall drives landslide risk
+1. **Distance to nearest landslide** (most important feature)
+2. **Distance to nearest flood** — historical flood proximity drives risk
 3. **Landslide density** — regions with many historical landslides remain dangerous
-4. **Elevation** — higher villages in mountainous terrain are at greater risk
-5. **Distance to school/hospital** — proxy for remoteness and limited emergency access
+4. **Flood density** — areas with frequent flooding are high-risk
+5. **Rainfall intensity** — heavy monsoon rainfall drives both landslide and flood risk
 
 **Local explanation** — For any village, SHAP shows exactly which features pushed the prediction toward RED or GREEN.
 
@@ -456,7 +474,8 @@ The model uses **SHAP (SHapley Additive exPlanations)** to explain every predict
 | EM-DAT only 18/124 NE India records have coordinates | Geocoding needed for 105 records | Used district centroids as proxy |
 | Census 2011 data is 15 years old | Population/growth data outdated | Spatial features are current (2021–2024) |
 | Sikkim Census data is a PDF (not xlsx) | 462 villages missing from dataset | Could OCR the PDF in future |
-| Model trained on landslide + flood labels | May miss other hazards (erosion, earthquake) | Expand GSI data for other hazard types |
+| DFO flood data has coverage gaps | Tinsukia, Dhubri flood events underrepresented | Model captures relative flood risk well |
+| Model captures relative risk, not absolute | Flat districts near flood plains may score lower | Add more flood zone data in future |
 
 ---
 

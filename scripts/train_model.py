@@ -50,6 +50,9 @@ def load_and_select_features():
         'road_density_5km',
         'dist_to_nearest_landslide_km', 'landslide_density_50km',
         'landslide_density_100km',
+        # Flood features (added to capture flood risk)
+        'dist_to_nearest_flood_km', 'flood_density_50km', 'flood_density_100km',
+        'flood_proxy_score', 'is_lowland', 'near_major_river',
     ]
 
     # Priority 2: Census vulnerability features
@@ -148,7 +151,6 @@ def train_xgboost(X, y):
         n_jobs=-1,
         eval_metric='auc',
         early_stopping_rounds=50,
-        use_label_encoder=False
     )
 
     # Stratified K-Fold cross-validation
@@ -241,7 +243,7 @@ def compute_shap_values(model, X, feature_names):
     return shap_values, X_sample, importance_df, explainer
 
 
-def generate_visualizations(model, X, y, oof_probs, oof_preds, importance_df, shap_values, X_sample):
+def generate_visualizations(model, X, y, oof_probs, oof_preds, importance_df, shap_values, X_sample, full_df=None):
     """Generate all evaluation plots."""
     print("\n=== Generating Visualizations ===")
 
@@ -293,7 +295,10 @@ def generate_visualizations(model, X, y, oof_probs, oof_preds, importance_df, sh
     axes[1, 1].grid(True, alpha=0.3)
 
     # 6. Risk by State
-    state_risk = pd.DataFrame({'high_risk': y, 'State': pd.read_csv(os.path.join(OUTPUT_DIR, 'ne_india_village_features.csv'), usecols=['State Name'], low_memory=False)['State Name']})
+    if full_df is not None and 'State Name' in full_df.columns:
+        state_risk = pd.DataFrame({'high_risk': y, 'State': full_df['State Name'].values})
+    else:
+        state_risk = pd.DataFrame({'high_risk': y, 'State': pd.read_csv(os.path.join(OUTPUT_DIR, 'ne_india_village_features.csv'), usecols=['State Name'], low_memory=False)['State Name']})
     state_stats = state_risk.groupby('State').agg(
         total=('high_risk', 'count'),
         high_risk=('high_risk', 'sum')
@@ -417,7 +422,7 @@ def main():
     shap_values, X_sample, importance_df, explainer = compute_shap_values(model, X, features)
 
     # 4. Generate visualizations
-    generate_visualizations(model, X, y, oof_probs, oof_preds, importance_df, shap_values, X_sample)
+    generate_visualizations(model, X, y, oof_probs, oof_preds, importance_df, shap_values, X_sample, full_df=df)
 
     # 5. Save model artifacts
     save_model_artifacts(model, importance_df, fold_scores, features)

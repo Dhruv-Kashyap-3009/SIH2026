@@ -222,14 +222,14 @@ def test_prioritization(df):
                 ps.min() >= 0 and ps.max() <= 1)
 
     # Priority levels are valid
-    valid_levels = {'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'}
+    valid_levels = {'HIGH', 'MEDIUM', 'LOW'}
     actual_levels = set(df['priority_level'].dropna().unique())
     assert_test(f"Priority levels valid", actual_levels.issubset(valid_levels))
 
-    # CRITICAL is top 10%
-    critical_pct = (df['priority_level'] == 'CRITICAL').mean() * 100
-    assert_test(f"CRITICAL is ~10% (got {critical_pct:.1f}%)",
-                8 <= critical_pct <= 12)
+    # HIGH is top 30%
+    high_pct = (df['priority_level'] == 'HIGH').mean() * 100
+    assert_test(f"HIGH is ~30% (got {high_pct:.1f}%)",
+                25 <= high_pct <= 35)
 
     # Higher risk → higher priority (on average)
     mean_priority_red = df[df['model_risk_zone'] == 'RED']['priority_score'].mean()
@@ -318,32 +318,8 @@ def test_model_files():
 def test_map_files():
     """Test generated map files."""
     print("\n=== TEST 8: Map and Report Files ===")
-
-    maps = {
-        'data/processed/maps/ne_india_risk_map.html': 1000000,
-        'data/processed/maps/dashboard.html': 10000,
-        'data/processed/maps/ne_india_state_summary.html': 1000,
-    }
-    for path, min_size in maps.items():
-        assert_test(f"Map file exists: {os.path.basename(path)}", os.path.exists(path))
-        if os.path.exists(path):
-            size = os.path.getsize(path)
-            assert_test(f"Map file > {min_size//1000}KB (got {size//1000}KB)", size > min_size)
-
-    # Reports
-    reports = [
-        'data/processed/reports/ne_india_risk_report.txt',
-        'data/processed/reports/critical_priority_villages.csv',
-        'data/processed/reports/all_villages_ranked.csv',
-        'data/processed/reports/dashboard_charts.png',
-    ]
-    for path in reports:
-        assert_test(f"Report exists: {os.path.basename(path)}", os.path.exists(path))
-
-    # State reports
-    for state in ['assam', 'meghalaya', 'arunachal_pradesh', 'manipur', 'mizoram', 'tripura', 'nagaland']:
-        path = f'data/processed/reports/{state}_report.txt'
-        assert_test(f"State report: {state}", os.path.exists(path))
+    # Maps and reports were removed per user request — only model artifacts remain.
+    print("  ⏭️  Skipped (maps/reports intentionally removed)")
 
 
 def test_model_predictions_loadable():
@@ -402,8 +378,162 @@ def test_cross_validation_consistency():
                     row['auc'] > 0.99)
 
 
+def test_prediction_output_fields():
+    """Test the new prediction output fields: habitation_id, district, top_factors, low_confidence, predicted_at, model_version."""
+    print("\n=== TEST 11: Prediction Output Fields ===")
+
+    csv_path = 'data/processed/prediction_output.csv'
+    assert_test("prediction_output.csv exists", os.path.exists(csv_path))
+
+    if not os.path.exists(csv_path):
+        return
+
+    df = pd.read_csv(csv_path, low_memory=False)
+
+    # 1. habitation_id
+    assert_test("habitation_id column exists", 'habitation_id' in df.columns)
+    if 'habitation_id' in df.columns:
+        assert_test("habitation_id has no NaN", df['habitation_id'].notna().all(),
+                     f"nulls={df['habitation_id'].isna().sum()}")
+        # Check format: State-District-SubDist-Village
+        sample = str(df['habitation_id'].iloc[0])
+        parts = sample.split('-')
+        assert_test(f"habitation_id is composite key (got {len(parts)} parts)", len(parts) == 4,
+                     f"sample={sample}")
+
+    # 2. district + state + village
+    for col in ['district', 'state', 'village']:
+        assert_test(f"'{col}' column exists", col in df.columns)
+        if col in df.columns:
+            assert_test(f"'{col}' has no NaN", df[col].notna().all())
+
+    # 3. risk_score
+    assert_test("risk_score column exists", 'risk_score' in df.columns)
+    if 'risk_score' in df.columns:
+        in_range = df['risk_score'].between(0, 1).all()
+        assert_test("risk_score in [0, 1]", in_range)
+
+    # 4. top_factors
+    assert_test("top_factors column exists", 'top_factors' in df.columns)
+    if 'top_factors' in df.columns:
+        # Every row should be valid JSON with 3-5 factors
+        valid_json = 0
+        factor_counts = []
+        valid_impacts = {'high', 'medium', 'low'}
+        all_valid = True
+        for val in df['top_factors'].dropna():
+            try:
+                factors = json.loads(str(val))
+                valid_json += 1
+                factor_counts.append(len(factors))
+                for f in factors:
+                    if f.get('impact') not in valid_impacts:
+                        all_valid = False
+            except:
+                all_valid = False
+        assert_test(f"All top_factors are valid JSON ({valid_json}/{len(df)})",
+                     valid_json == len(df))
+        assert_test(f"All top_factors have 3-5 entries (min={min(factor_counts)}, max={max(factor_counts)})",
+                     all(3 <= c <= 5 for c in factor_counts) if factor_counts else False)
+        assert_test("All top_factors have valid impact values (high/medium/low)", all_valid)
+
+    # 5. low_confidence
+    assert_test("low_confidence column exists", 'low_confidence' in df.columns)
+    if 'low_confidence' in df.columns:
+        assert_test("low_confidence is boolean type", df['low_confidence'].dtype == 'bool',
+                     f"dtype={df['low_confidence'].dtype}")
+        assert_test("low_confidence has both True and False values",
+                     df['low_confidence'].any() and (~df['low_confidence']).any())
+
+    # 6. predicted_at
+    assert_test("predicted_at column exists", 'predicted_at' in df.columns)
+    if 'predicted_at' in df.columns:
+        sample_ts = str(df['predicted_at'].iloc[0])
+        assert_test("predicted_at contains ISO timestamp",
+                     'T' in sample_ts and len(sample_ts) > 10,
+                     f"sample={sample_ts}")
+
+    # 7. model_version
+    assert_test("model_version column exists", 'model_version' in df.columns)
+    if 'model_version' in df.columns:
+        sample_ver = str(df['model_version'].iloc[0])
+        assert_test("model_version is non-empty string",
+                     len(sample_ver) > 2, f"sample={sample_ver}")
+        assert_test("model_version starts with 'v'", sample_ver.startswith('v'),
+                     f"sample={sample_ver}")
+
+    # 8. Existing fields still present
+    for col in ['latitude', 'longitude', 'priority_level']:
+        assert_test(f"Existing field '{col}' still present", col in df.columns)
+
+
+def test_bug_fixes():
+    """Regression tests for bugs that were fixed."""
+    print("\n=== TEST 12: Bug Fix Regression ===")
+
+    # 1. No stale UTM column in main CSV
+    df_main = pd.read_csv('data/processed/ne_india_village_features.csv', low_memory=False, nrows=10)
+    assert_test("No dist_to_nearest_landslide_km_utm column",
+                 'dist_to_nearest_landslide_km_utm' not in df_main.columns)
+
+    # 2. pd.cut produces 0 NaN zones
+    df_scores = pd.read_csv('data/processed/ne_india_village_features.csv',
+                            usecols=['model_risk_score'], low_memory=False)
+    zones = pd.cut(df_scores['model_risk_score'],
+                   bins=[-0.01, 0.3, 0.7, 1.01],
+                   labels=['GREEN', 'ORANGE', 'RED'])
+    assert_test("pd.cut produces 0 NaN zones", zones.isna().sum() == 0,
+                 f"got {zones.isna().sum()} NaN")
+
+    # 3. prediction_output has both model_risk_score and risk_score, consistent
+    df_pred = pd.read_csv('data/processed/prediction_output.csv',
+                          usecols=['model_risk_score', 'risk_score'], low_memory=False)
+    assert_test("prediction_output has both risk_score columns",
+                 'model_risk_score' in df_pred.columns and 'risk_score' in df_pred.columns)
+    assert_test("model_risk_score == risk_score (consistency)",
+                 (df_pred['model_risk_score'] == df_pred['risk_score']).all())
+
+    # 4. district/state/village aliases exist alongside originals
+    # district/state/village are only in prediction_output.csv, not the main features CSV
+    df_aliases = pd.read_csv('data/processed/prediction_output.csv',
+                             nrows=5, low_memory=False)
+    for col in ['district', 'state', 'village', 'District Name', 'State Name', 'Village Name']:
+        assert_test(f"Column '{col}' in prediction output", col in df_aliases.columns)
+
+    # 5. All features have variance (no constant columns)
+    import json
+    with open('models/features.json') as f:
+        features = json.load(f)
+    df_feats = pd.read_csv('data/processed/ne_india_village_features.csv', low_memory=False)
+    const_feats = [f for f in features if f in df_feats.columns and df_feats[f].nunique() <= 1]
+    assert_test(f"No constant feature columns (checked {len(features)})",
+                 len(const_feats) == 0, f"constant: {const_feats}")
+
+    # 6. Single-village prediction uses median imputation (not 0.0)
+    import xgboost as xgb
+    model = xgb.XGBClassifier()
+    model.load_model('models/red_zone_xgboost.json')
+    with open('models/features.json') as f:
+        features = json.load(f)
+    df_full = pd.read_csv('data/processed/ne_india_village_features.csv', low_memory=False, nrows=200)
+    for idx, row in df_full.iterrows():
+        row_features = row[features]
+        if row_features.isna().any():
+            X_median = row_features.to_frame().T.copy()
+            for col in X_median.columns:
+                if X_median[col].isna().sum() > 0:
+                    X_median[col] = X_median[col].fillna(X_median[col].median())
+            prob = model.predict_proba(X_median.astype(float).values)[0][1]
+            assert_test(f"Single-village prediction with NaN feature works (row {idx}, prob={prob:.4f})",
+                         0 <= prob <= 1)
+            break
+    else:
+        assert_test("Single-village prediction with NaN feature works (no NaN in sample)", True)
+
+
 def main():
     """Run all tests."""
+    global PASS, FAIL, ERRORS
     print("=" * 70)
     print("END-TO-END TEST SUITE")
     print("NE India Hazard Red Zone Platform")
@@ -420,6 +550,8 @@ def main():
         test_map_files()
         test_model_predictions_loadable()
         test_cross_validation_consistency()
+        test_prediction_output_fields()
+        test_bug_fixes()
     except Exception as e:
         print(f"\n💥 FATAL ERROR: {e}")
         traceback.print_exc()

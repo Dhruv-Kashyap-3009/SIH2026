@@ -190,7 +190,6 @@ def main():
 
     df['gsi_landslide_zone'] = in_landslide_zone.values
     df['emdat_disaster_zone'] = in_emdat_zone.values
-    df['dist_to_nearest_landslide_km_utm'] = dists_km
 
     # Combined label: high_risk = 1 if in landslide zone OR EM-DAT zone
     df['high_risk'] = ((df['gsi_landslide_zone'] == True) | (df['emdat_disaster_zone'] == True)).astype(int)
@@ -230,7 +229,7 @@ def main():
 
     landslide_50km = df['landslide_density_50km'].fillna(0)
     landslide_100km = df['landslide_density_100km'].fillna(0)
-    dist_landslide = df['dist_to_nearest_landslide_km_utm'].fillna(999)
+    dist_landslide = df['dist_to_nearest_landslide_km'].fillna(999)
 
     conditions_red = (
         (df['gsi_landslide_zone'] == True) & (landslide_100km > 50)
@@ -269,7 +268,7 @@ def main():
     # Also save a clean labels-only file for quick reference
     labels_df = df[['Village Name', 'State Name', 'District Name', 'latitude', 'longitude',
                      'high_risk', 'risk_zone', 'gsi_landslide_zone', 'emdat_disaster_zone',
-                     'dist_to_nearest_landslide_km_utm', 'landslide_density_50km',
+                     'dist_to_nearest_landslide_km', 'landslide_density_50km',
                      'landslide_density_100km']].copy()
     labels_df.to_csv('data/processed/village_risk_labels.csv', index=False)
     print(f'Saved: data/processed/village_risk_labels.csv')

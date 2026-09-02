@@ -323,12 +323,25 @@ SIH2026/
 │   ├── extract_raster_features.py     # Phase 1: SRTM + WorldCover extraction
 │   ├── extract_vector_features.py     # Phase 1: OSM + Landslide distances
 │   ├── extract_flood_features.py      # Phase 1: DFO flood feature extraction
+│   ├── extract_cloudburst_features.py # Phase 1: Cloudburst risk proxy (pluggable stub)
 │   ├── combine_features.py            # Phase 1: Merge all features
 │   ├── create_labels.py               # Phase 2: Binary + multiclass labels
 │   ├── update_labels_flood.py         # Phase 2: Add DFO flood zones as label source
 │   ├── train_model.py                 # Phase 3: XGBoost + SHAP training
 │   ├── phase4_visualization.py        # Phase 4: Prioritization + reports
-│   └── predict.py                     # Standalone prediction script
+│   ├── predict.py                     # Standalone prediction script
+│   ├── carrying_capacity.py           # Carrying capacity engine for GREEN zones
+│   ├── match_relocation_sites.py      # Greedy relocation site matcher
+│   └── refresh_rainfall.py            # Real-time rainfall refresh (demo hook)
+│
+├── backend/                           # FastAPI GIS dashboard backend
+│   ├── main.py                        # API server (villages, SHAP, matches, refresh)
+│   └── requirements.txt               # Backend dependencies
+│
+├── frontend/                          # GIS dashboard frontend
+│   └── index.html                     # Leaflet map + marker clustering + sidebar
+│
+├── run_dashboard.sh                   # One-command dashboard startup
 │
 ├── models/                            # Trained model artifacts
 │   ├── red_zone_xgboost.json          # Trained XGBoost model (1.9 MB)
@@ -447,6 +460,39 @@ Villages are ranked by **priority_score = risk_score × vulnerability_multiplier
 - **HIGH:** Top 30% — short-term action
 - **MEDIUM:** Middle 30% — monitoring and planning
 - **LOW:** Bottom 40% — routine monitoring
+
+---
+
+## 🌊 Hazard Scope
+
+The problem statement names four hazard types: **landslides**, **floods**, **coastal erosion**, and **cloudbursts**. The current pipeline covers the first two (NE India's dominant hazards) and is architected to be extensible to the others.
+
+### Currently Implemented
+
+| Hazard | Label Source | Feature Sources | Status |
+|--------|-------------|----------------|--------|
+| **Landslides** | GSI landslide inventory (10,408 points) | Distance to landslide, landslide density 50/100km, slope, elevation, terrain roughness | ✅ Production |
+| **Floods** | DFO Global Flood Database (274 NE India events) | Flood density 50/100km, distance to flood zone, flood proxy score, is_lowland, near_major_river | ✅ Production |
+
+### Architecturally Pluggable (Not Yet Implemented)
+
+| Hazard | Proposed Data Source | How to Add |
+|--------|-------------------|------------|
+| **Coastal Erosion** | ISRO/NRSC shoreline change data, CWPRS erosion maps | Create `extract_coastal_features.py` — compute distance to coast, erosion rate proxy (elevation + wave exposure), shoreline change index |
+| **Cloudbursts** | IMD 1-min/5-min rainfall data, satellite-based rainfall estimates | Create `extract_cloudburst_features.py` — already stubbed, derives features from existing IMD rainfall (max_daily_rainfall_mm, rain_days_per_year, concentration index) |
+
+### How to Add a New Hazard Module
+
+Follow the existing pattern used for flood features:
+
+```
+1. extract_<hazard>_features.py  → Extract per-village features from new data
+2. combine_features.py            → Add new columns to the feature matrix
+3. update_labels_<hazard>.py      → Add new label source (if historical events available)
+4. Retrain model with updated labels + features
+```
+
+The cloudburst extraction script (`scripts/extract_cloudburst_features.py`) is already implemented as a reference stub — it computes `cloudburst_risk_score` and `extreme_rainfall_days` from existing IMD data without requiring any new datasets.
 
 ---
 

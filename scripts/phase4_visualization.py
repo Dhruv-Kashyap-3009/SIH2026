@@ -121,11 +121,9 @@ def compute_prioritization_score(df):
     # Combined priority score (risk × vulnerability)
     df['priority_score'] = df['model_risk_score'] * df['vulnerability_score']
 
-    # Priority categories
+    # Priority categories (PS-aligned: HIGH/MEDIUM/LOW)
     df['priority_level'] = 'LOW'
-    df.loc[df['priority_score'] >= df['priority_score'].quantile(0.9), 'priority_level'] = 'CRITICAL'
-    df.loc[(df['priority_score'] >= df['priority_score'].quantile(0.7)) & 
-           (df['priority_score'] < df['priority_score'].quantile(0.9)), 'priority_level'] = 'HIGH'
+    df.loc[df['priority_score'] >= df['priority_score'].quantile(0.7), 'priority_level'] = 'HIGH'
     df.loc[(df['priority_score'] >= df['priority_score'].quantile(0.4)) & 
            (df['priority_score'] < df['priority_score'].quantile(0.7)), 'priority_level'] = 'MEDIUM'
 
@@ -133,12 +131,12 @@ def compute_prioritization_score(df):
     print(df['priority_level'].value_counts().to_string())
     print()
 
-    print("Priority by state (top CRITICAL villages):")
-    critical = df[df['priority_level'] == 'CRITICAL']
-    for state in sorted(critical['State Name'].unique()):
-        count = (critical['State Name'] == state).sum()
+    print("Priority by state (top HIGH priority villages):")
+    high = df[df['priority_level'] == 'HIGH']
+    for state in sorted(high['State Name'].unique()):
+        count = (high['State Name'] == state).sum()
         total_state = (df['State Name'] == state).sum()
-        print(f"  {state}: {count:,} CRITICAL / {total_state:,} total")
+        print(f"  {state}: {count:,} HIGH / {total_state:,} total")
 
     return df
 

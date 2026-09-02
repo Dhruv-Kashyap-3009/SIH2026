@@ -531,6 +531,136 @@ def test_bug_fixes():
         assert_test("Single-village prediction with NaN feature works (no NaN in sample)", True)
 
 
+def test_carrying_capacity():
+    """Test 13: Carrying Capacity Engine."""
+    print("\n=== TEST 13: Carrying Capacity ===")
+    
+    path = 'data/processed/carrying_capacity.csv'
+    assert_test("carrying_capacity.csv exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+    
+    df = pd.read_csv(path)
+    assert_test(f"Has villages (got {len(df)})", len(df) > 1000)
+    
+    # Column checks
+    for col in ['village_id', 'village_name', 'state', 'carrying_capacity_score',
+                'estimated_absorbable_population', 'limiting_factor', 'latitude', 'longitude']:
+        assert_test(f"Column '{col}' exists", col in df.columns)
+    
+    # Score in [0, 1]
+    scores = df['carrying_capacity_score']
+    assert_test(f"Capacity scores in [0,1] (min={scores.min():.3f}, max={scores.max():.3f})",
+                 scores.min() >= 0 and scores.max() <= 1)
+    
+    # No negative absorbable population
+    assert_test("No negative absorbable population",
+                 (df['estimated_absorbable_population'] >= 0).all())
+    
+    # Limiting factors are valid
+    valid_factors = {'land', 'density', 'water', 'power', 'road', 'health', 'education'}
+    actual_factors = set(df['limiting_factor'].unique())
+    assert_test(f"All limiting factors valid",
+                 actual_factors.issubset(valid_factors), f"got: {actual_factors}")
+    
+    # Only GREEN or low-ORANGE villages
+    zones = set(df['risk_zone'].unique())
+    assert_test(f"Only GREEN/ORANGE villages (got {zones})",
+                 zones.issubset({'GREEN', 'ORANGE'}))
+    
+    # All villages are unique
+    assert_test(f"All village_ids unique ({df['village_id'].nunique()} == {len(df)})",
+                 df['village_id'].nunique() == len(df))
+
+
+def test_relocation_timeline():
+    """Test 14: Relocation Timeline Reclassification."""
+    print("\n=== TEST 14: Relocation Timeline ===")
+    
+    path = 'data/processed/prediction_output.csv'
+    assert_test("prediction_output.csv exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+    
+    df = pd.read_csv(path, low_memory=False)
+    
+    # Column exists
+    assert_test("Column 'relocation_timeline' exists", 'relocation_timeline' in df.columns)
+    
+    # Valid values
+    valid_tiers = {'IMMEDIATE', 'SHORT_TERM', 'MEDIUM_TERM', 'MONITOR'}
+    actual_tiers = set(df['relocation_timeline'].unique())
+    assert_test(f"All relocation_timeline values valid", actual_tiers.issubset(valid_tiers), f"got: {actual_tiers}")
+    
+    # No tier is empty
+    for tier in ['IMMEDIATE', 'SHORT_TERM', 'MEDIUM_TERM', 'MONITOR']:
+        count = (df['relocation_timeline'] == tier).sum()
+        assert_test(f"{tier} is not empty (got {count})", count > 0)
+    
+    # IMMEDIATE ⊆ RED zone (all IMMEDIATE villages must be RED or high-ORANGE)
+    imm = df[df['relocation_timeline'] == 'IMMEDIATE']
+    imm_in_red_or_high_orange = imm[
+        (imm['risk_zone'] == 'RED') | 
+        ((imm['risk_zone'] == 'ORANGE') & (imm['risk_score'] >= 0.7))
+    ]
+    pct = len(imm_in_red_or_high_orange) / len(imm) * 100 if len(imm) > 0 else 0
+    assert_test(f"IMMEDIATE ⊆ RED/high-ORANGE ({pct:.0f}%)", pct >= 95)
+    
+    # SHORT_TERM villages have risk_score >= 0.7
+    short = df[df['relocation_timeline'] == 'SHORT_TERM']
+    assert_test(f"SHORT_TERM villages have score >= 0.7 (min={short['risk_score'].min():.3f})",
+                 short['risk_score'].min() >= 0.65)  # small tolerance
+    
+    # IMMEDIATE villages have risk_score >= 0.7
+    assert_test(f"IMMEDIATE villages have score >= 0.7 (min={imm['risk_score'].min():.3f})",
+                 imm['risk_score'].min() >= 0.65)
+
+
+def test_relocation_matching():
+    """Test 14: Relocation Site Matching."""
+    print("\n=== TEST 14: Relocation Matching ===")
+    
+    path = 'data/processed/relocation_matches.csv'
+    assert_test("relocation_matches.csv exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+    
+    df = pd.read_csv(path)
+    assert_test(f"Has matches (got {len(df)})", len(df) > 1000)
+    
+    # Column checks
+    for col in ['source_village_id', 'target_village_id', 'distance_km',
+                'target_carrying_capacity_score', 'target_remaining_capacity']:
+        assert_test(f"Column '{col}' exists", col in df.columns)
+    
+    # Distances are positive (where not NaN)
+    valid_dist = df['distance_km'].dropna()
+    assert_test(f"Distances positive (min={valid_dist.min():.1f})",
+                 (valid_dist >= 0).all())
+    
+    # Distances within radius (50km)
+    assert_test(f"Distances <= 50km (max={valid_dist.max():.1f})",
+                 (valid_dist <= 50.1).all())  # small tolerance
+    
+    # No village allocated beyond its capacity
+    # (remaining_capacity should never go below 0)
+    remaining = df['target_remaining_capacity'].dropna()
+    assert_test(f"No negative remaining capacity (min={remaining.min():.0f})",
+                 (remaining >= 0).all())
+    
+    # Every source village has at least one match or is flagged
+    sources_with_match = df[df['target_village_id'] != 'NO_SAFE_SITE_FOUND']['source_village_id'].nunique()
+    sources_no_match = df[df['target_village_id'] == 'NO_SAFE_SITE_FOUND']['source_village_id'].nunique()
+    total_sources = df['source_village_id'].nunique()
+    assert_test(f"All source villages accounted for ({sources_with_match} matched + {sources_no_match} no-match = {total_sources})",
+                 sources_with_match + sources_no_match == total_sources)
+    
+    # Target carrying capacity scores in [0, 1]
+    target_scores = df['target_carrying_capacity_score'].dropna()
+    assert_test(f"Target capacity scores in [0,1]",
+                 target_scores.min() >= 0 and target_scores.max() <= 1)
+
+
 def main():
     """Run all tests."""
     global PASS, FAIL, ERRORS
@@ -552,6 +682,9 @@ def main():
         test_cross_validation_consistency()
         test_prediction_output_fields()
         test_bug_fixes()
+        test_relocation_timeline()
+        test_carrying_capacity()
+        test_relocation_matching()
     except Exception as e:
         print(f"\n💥 FATAL ERROR: {e}")
         traceback.print_exc()

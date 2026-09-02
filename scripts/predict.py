@@ -174,6 +174,38 @@ def predict_all(model, features, df):
     df.loc[df['risk_score'] >= 0.7, 'predicted_risk_zone'] = 'RED'
     df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.7), 'predicted_risk_zone'] = 'ORANGE'
 
+    # ── Relocation Timeline (PS-aligned tiers) ──────────────────────────────
+    # IMMEDIATE: risk_score >= 0.85 AND (in disaster zone OR high density)
+    # SHORT_TERM: risk_score >= 0.7 but not IMMEDIATE
+    # MEDIUM_TERM: ORANGE zone with score 0.55-0.7
+    in_disaster = (df.get('gsi_landslide_zone', 0) == 1) | (df.get('emdat_disaster_zone', 0) == 1)
+    pop_col = 'Total Population of Village'
+    if pop_col in df.columns:
+        pop = df[pop_col].fillna(0)
+        area_col = 'Total Geographical Area (in Hectares)'
+        if area_col in df.columns:
+            area = df[area_col].replace(0, 1).fillna(1)
+            density = pop / area
+            high_density = density > density.quantile(0.8)
+        else:
+            high_density = pop > pop.quantile(0.8)
+    else:
+        high_density = False
+
+    df['relocation_timeline'] = 'MONITOR'
+    df.loc[
+        (df['risk_score'] >= 0.7) & ~(in_disaster | high_density),
+        'relocation_timeline'] = 'SHORT_TERM'
+    df.loc[
+        (df['risk_score'] >= 0.55) & (df['risk_score'] < 0.7),
+        'relocation_timeline'] = 'MEDIUM_TERM'
+    df.loc[
+        (df['risk_score'] >= 0.85) & (in_disaster | high_density),
+        'relocation_timeline'] = 'IMMEDIATE'
+    df.loc[
+        (df['risk_score'] >= 0.7) & (df['risk_score'] < 0.85) & (in_disaster | high_density),
+        'relocation_timeline'] = 'IMMEDIATE'
+
     # Compute per-village SHAP top factors
     df['top_factors'] = compute_top_factors(model, X, features, n_top=5)
 

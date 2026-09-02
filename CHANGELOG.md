@@ -2,7 +2,53 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Model Improvement Pass (Tasks 1-6)
+
+### Task 1: Close Spatial Generalization Gap
+- **Hyperparameter search**: Grid search over max_depth (4,6), n_estimators (300,500), learning_rate (0.05), optimized for LOSO AUC. Best: max_depth=4, n_estimators=500.
+- **LOSO AUC improved**: 0.685 → 0.696 (+1.1%). Still a large gap vs random CV (0.962) — reveals fundamental spatial autocorrelation in features.
+- **Interaction features (slope×rainfall, TWI proxy) HURT**: LOSO decreased by -0.005. Dropped from feature set. Physical interactions don't help when single features already capture the signal.
+- **LogReg baseline**: LOSO AUC=0.573 (much worse than XGBoost's 0.696). Extra model complexity IS warranted for spatial transfer.
+- **Per-state LOSO**: Worst states: Tripura (0.569), Arunachal Pradesh (0.603). Best: Meghalaya (0.807), Nagaland (0.769).
+- **Output**: models/hyperparam_search_spatial.csv, models/spatial_cv_scores.json (with loso_per_state)
+
+### Task 5: Threshold Optimization
+- **Cost-optimal threshold**: 0.38 (vs current 0.7). With FN cost weight=5x, lowering threshold dramatically reduces missed-risk cost (90.4% reduction).
+- **Quantile-based zoning**: Also implemented — top 67% by score = RED.
+- **New columns in prediction_output.csv**: predicted_risk_zone_fixed, predicted_risk_zone_quantile
+- **Output**: models/threshold_cost_curve.csv, models/threshold_metadata.json
+
+### Task 4: Model Calibration
+- **Model is already well-calibrated**: ECE=0.021 (excellent). Platt scaling and isotonic regression WORSENED calibration (ECE=0.224 and 0.205). XGBoost's predict_proba is naturally well-calibrated on this data.
+- **Calibration NOT applied** — model outputs used as-is.
+- **Output**: models/calibration_plot.png, models/calibration_metadata.json
+
+### Task 2: Distance-Decay Soft Labels
+- **Soft risk contribution**: exp(-distance_km / decay_constant), summing landslide (decay=5km) and flood (decay=7km) contributions.
+- **Combined soft risk mean**: 0.728 (vs hard label positive rate 68%). More nuanced risk picture.
+- **New columns**: soft_risk_landslide, soft_risk_flood, soft_risk_combined
+- **Output**: models/soft_label_metadata.json
+
+### Task 6: Uncertainty Quantification
+- **Bootstrap ensemble**: 7 XGBoost models trained on resampled data.
+- **Prediction uncertainty**: Continuous measure [0,1] based on prediction variance across ensemble.
+- **Low confidence**: 25.0% of villages (top quartile of uncertainty).
+- **New columns**: prediction_uncertainty, prediction_std, low_confidence (updated to continuous)
+- **Output**: models/uncertainty_metadata.json
+
+### Negative Results (Honest Reporting)
+- Interaction features (slope×rainfall, TWI proxy) did NOT help LOSO AUC. Physical interaction terms don't add signal when single features already capture the mechanism.
+- Calibration methods worsened model calibration. XGBoost's native probability estimates are already well-calibrated.
+- The 0.265 LOSO-to-random CV gap persists despite tuning. This reflects genuine spatial autocorrelation in the features, not a model tuning problem.
+
 ## [Unreleased] — Phase 1-5 + Bug Fixes
+
+### FIX 3 — Stale README Numbers (Data Consistency)
+- **Bug**: The README's headline Risk Zone Distribution (29,204 RED = 66.4%) and per-state Risk by State table (22,742 RED = 51.7%) described the same metric but disagreed by 6,462 villages (~14.7 percentage points).
+- **Root cause**: Both tables were stale from different points in the pipeline's evolution. The headline was partially updated after bug fixes but never re-derived from the actual `prediction_output.csv`. The per-state table was written early (pre-tie-break fix) and never regenerated.
+- **Investigation**: `predicted_risk_zone` (historical model, thresholds: RED ≥ 0.7, ORANGE 0.4–0.7, GREEN < 0.4) is the source of truth. Actual current counts: RED=29,687 (67.5%), ORANGE=258 (0.6%), GREEN=14,051 (31.9%). Per-state sum now matches headline exactly.
+- **Fix**: Regenerated both tables from `prediction_output.csv`. Added explicit zone-definition note in README. Added `test_state_totals_consistency()` test (7 assertions) that verifies per-state RED/ORANGE/GREEN counts sum to headline totals. Also corrected stale relocation priority and hazard decomposition counts.
+- **Test impact**: 251 → 263 assertions.
 
 ### FIX 1 — Slope Extraction Corruption (Critical)
 - **Bug**: `extract_raster_features.py` computed slope using `np.gradient(window, src.res[0])` where `src.res[0]` is in degrees (EPSG:4326). This produced rise(meters)/run(degrees) instead of rise/run in consistent units, pushing every slope estimate toward ~90°.

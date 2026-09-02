@@ -174,28 +174,6 @@ def predict_all(model, features, df):
     df.loc[df['risk_score'] >= 0.7, 'predicted_risk_zone'] = 'RED'
     df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.7), 'predicted_risk_zone'] = 'ORANGE'
 
-    # ── Novel Red Zone Detection ──────────────────────────────────────────
-    # A "novel" red zone is a village flagged RED/HIGH by the susceptibility
-    # model but which has NO recorded historical landslide, flood, or EM-DAT
-    # event within the standard buffer distances.
-    # This is the headline differentiator: the model finds villages that are
-    # physically susceptible but have never experienced a recorded disaster.
-    has_landslide = df.get('gsi_landslide_zone', pd.Series(0, index=df.index)) == 1
-    has_emdat = df.get('emdat_disaster_zone', pd.Series(0, index=df.index)) == 1
-    has_flood = df.get('dfo_flood_zone', pd.Series(0, index=df.index)) == 1
-    has_historical_event = has_landslide | has_emdat | has_flood
-
-    df['is_novel_red_zone'] = (
-        (df['predicted_risk_zone'] == 'RED') &
-        (~has_historical_event)
-    )
-
-    novel_count = df['is_novel_red_zone'].sum()
-    red_count = (df['predicted_risk_zone'] == 'RED').sum()
-    if red_count > 0:
-        print(f"  Novel red zones: {novel_count:,} / {red_count:,} RED villages "
-              f"({novel_count/red_count*100:.1f}% have no recorded disaster)")
-
     # ── Relocation Timeline (PS-aligned tiers) ──────────────────────────────
     # IMMEDIATE: risk_score >= 0.85 AND (in disaster zone OR high density)
     # SHORT_TERM: risk_score >= 0.7 but not IMMEDIATE
@@ -460,6 +438,26 @@ def main():
     else:
         df['susceptibility_score'] = None
         df['susceptibility_risk_zone'] = None
+
+    # ── Novel Red Zone Detection ──────────────────────────────────────────
+    # A "novel" red zone is a village flagged RED by the susceptibility model
+    # but which has NO recorded historical landslide, flood, or EM-DAT event.
+    # This is the headline differentiator for proactive relocation planning.
+    has_landslide = df.get('gsi_landslide_zone', pd.Series(0, index=df.index)) == 1
+    has_emdat = df.get('emdat_disaster_zone', pd.Series(0, index=df.index)) == 1
+    has_flood = df.get('dfo_flood_zone', pd.Series(0, index=df.index)) == 1
+    has_historical_event = has_landslide | has_emdat | has_flood
+
+    df['is_novel_red_zone'] = (
+        (df['susceptibility_risk_zone'] == 'RED') &
+        (~has_historical_event)
+    )
+
+    novel_count = int(df['is_novel_red_zone'].sum())
+    susc_red = int((df['susceptibility_risk_zone'] == 'RED').sum())
+    if susc_red > 0:
+        print(f"  Novel red zones: {novel_count:,} / {susc_red:,} susceptibility RED "
+              f"({novel_count/susc_red*100:.1f}% have no recorded disaster)")
 
     # ── Add timestamps + model version ───────────────────────────────────
     predicted_at = datetime.now(timezone.utc).isoformat()

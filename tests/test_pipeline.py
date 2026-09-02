@@ -531,6 +531,63 @@ def test_bug_fixes():
         assert_test("Single-village prediction with NaN feature works (no NaN in sample)", True)
 
 
+def test_state_totals_consistency():
+    """Test 12b: Verify per-state RED counts sum to headline RED count."""
+    print("\n=== TEST 12b: State Totals Consistency ===")
+
+    df = pd.read_csv('data/processed/prediction_output.csv', low_memory=False)
+    total_villages = len(df)
+
+    # Headline zone counts
+    headline = df['predicted_risk_zone'].value_counts()
+    headline_red = int(headline.get('RED', 0))
+    headline_orange = int(headline.get('ORANGE', 0))
+    headline_green = int(headline.get('GREEN', 0))
+
+    # Per-state zone counts
+    state_total = df.groupby('State Name').size()
+    state_red = df[df['predicted_risk_zone'] == 'RED'].groupby('State Name').size()
+    state_orange = df[df['predicted_risk_zone'] == 'ORANGE'].groupby('State Name').size()
+    state_green = df[df['predicted_risk_zone'] == 'GREEN'].groupby('State Name').size()
+
+    # Sum of per-state RED == headline RED
+    sum_red = int(state_red.sum())
+    assert_test("Per-state RED sum == headline RED count",
+                 sum_red == headline_red,
+                 f"per-state sum={sum_red}, headline={headline_red}")
+
+    # Sum of per-state ORANGE == headline ORANGE
+    sum_orange = int(state_orange.sum())
+    assert_test("Per-state ORANGE sum == headline ORANGE count",
+                 sum_orange == headline_orange,
+                 f"per-state sum={sum_orange}, headline={headline_orange}")
+
+    # Sum of per-state GREEN == headline GREEN
+    sum_green = int(state_green.sum())
+    assert_test("Per-state GREEN sum == headline GREEN count",
+                 sum_green == headline_green,
+                 f"per-state sum={sum_green}, headline={headline_green}")
+
+    # Per-state totals sum to total villages
+    sum_totals = int(state_total.sum())
+    assert_test("Per-state totals sum to total village count",
+                 sum_totals == total_villages,
+                 f"per-state sum={sum_totals}, total={total_villages}")
+
+    # No state has zero total
+    assert_test("No state has zero villages",
+                 (state_total > 0).all())
+
+    # Each state's RED+ORANGE+GREEN == state total
+    for s in state_total.index:
+        s_red = state_red.get(s, 0)
+        s_orange = state_orange.get(s, 0)
+        s_green = state_green.get(s, 0)
+        s_total = state_total[s]
+        assert_test(f"{s}: RED+ORANGE+GREEN == total ({s_red}+{s_orange}+{s_green}={s_red+s_orange+s_green} vs {s_total})",
+                     int(s_red + s_orange + s_green) == int(s_total))
+
+
 def test_carrying_capacity():
     """Test 13: Carrying Capacity Engine (Phase 2)."""
     print("\n=== TEST 13: Carrying Capacity ===")
@@ -851,6 +908,7 @@ def main():
         test_cross_validation_consistency()
         test_prediction_output_fields()
         test_bug_fixes()
+        test_state_totals_consistency()
         test_relocation_timeline()
         test_carrying_capacity()
         test_relocation_matching()

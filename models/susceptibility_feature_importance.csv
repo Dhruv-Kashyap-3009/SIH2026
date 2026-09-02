@@ -1,60 +1,60 @@
 feature,importance
-elevation_m,0.618555
-rain_days_per_year,0.56809413
-max_daily_rainfall_mm,0.5194252
-rainfall_90th_percentile_mm,0.38934603
-rainfall_95th_percentile_mm,0.3761545
-mean_daily_rainfall_mm,0.34121725
-dist_to_nearest_hospital_km,0.31581673
-dist_to_nearest_school_km,0.2766673
-road_density_5km,0.25645536
-slope_degrees,0.12404975
-Power Supply For Domestic Use Summer (April-Sept.) per day (in Hours),0.07337245
-dist_to_nearest_river_km,0.070640765
-Total Geographical Area (in Hectares),0.06368883
-terrain_roughness,0.060555104
-Current Fallows Area (in Hectares),0.05526534
-dist_to_nearest_road_km,0.05400186
-Total Population of Village,0.047733534
-Fallows Land other than Current Fallows Area (in Hectares),0.044876453
-Power Supply For All Users Summer (April-Sept.) per day (in Hours),0.037687168
-Power Supply For Domestic Use Winter (Oct.-March) per day (in Hours),0.034761213
-Barren & Un-cultivable Land Area (in Hectares),0.029520525
-Hand Pump Functioning All round the year (Status A(1)/NA(2)),0.023558306
-Forest Area (in Hectares),0.021177659
-Tube Wells/Borehole Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.018936645
-All Weather Road (Status A(1)/NA(2)),0.018061798
-Whether Drain water is discharged directly into water bodies or to sewar plant (For Water Bodies-1/Sewar Plants-2),0.01596144
-Power Supply For Domestic Use  (Status A(1)/NA(2)),0.015928116
-Power Supply For Agriculture Use Winter (Oct.-March)per day (in Hours),0.015852354
-Hand Pump Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.014389706
-Power Supply For Commercial Use Summer (April-Sept.) per day (in Hours),0.01379283
-Uncovered  Well Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.013303326
-is_lowland,0.011655824
-Power Supply For Agriculture Use Summer (April-Sept.) per day (in Hours),0.009830788
-Tube Wells/Borehole Functioning All round the year (Status A(1)/NA(2)),0.00955135
-Wells/Tube Wells Area (in Hectares),0.008878026
-Uncovered  Well (Status A(1)/NA(2)),0.00848406
-Hand Pump (Status A(1)/NA(2)),0.008460231
-Power Supply For Commercial Use Winter (Oct.-March) per day (in Hours),0.008426518
-Tube Wells/Borehole (Status A(1)/NA(2)),0.008096153
-Power Supply For All Users Winter (Oct.-March) per day (in Hours),0.007326046
-Uncovered  Well Functioning All round the year (Status A(1)/NA(2)),0.006958286
-Black Topped (pucca) Road (Status A(1)/NA(2)),0.0065825675
-Spring Functioning All round the year (Status A(1)/NA(2)),0.0046014404
-Covered Well Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.004389722
-Tap Water Untreated (Status A(1)/NA(2)),0.0041869995
-Spring (Status A(1)/NA(2)),0.0036566532
-near_major_river,0.0036107688
-Tap Water Untreated Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0034904035
-Covered Well (Status A(1)/NA(2)),0.003052028
-Tap Water-Treated Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0028475942
-Tap Water-Treated Functioning All round the year (Status A(1)/NA(2)),0.0027234273
-Spring Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0024888143
-Covered Well Functioning All round the year (Status A(1)/NA(2)),0.002434044
-Tap Water Untreated Functioning All round the year (Status A(1)/NA(2)),0.0024268178
-Power Supply For All Users (Status A(1)/NA(2)),0.0020077315
-Waterfall Area (in Hectares),0.0016551599
-Tap Water-Treated (Status A(1)/NA(2)),0.0016389566
-Power Supply For Commercial Use (Status A(1)/NA(2)),0.0009988194
-Power Supply For Agriculture Use (Status A(1)/NA(2)),0.0005045272
+rain_days_per_year,0.48395905
+elevation_m,0.46923998
+max_daily_rainfall_mm,0.45148498
+rainfall_95th_percentile_mm,0.37683988
+rainfall_90th_percentile_mm,0.3299969
+mean_daily_rainfall_mm,0.2984785
+dist_to_nearest_school_km,0.25123614
+dist_to_nearest_hospital_km,0.2215433
+road_density_5km,0.16844429
+slope_degrees,0.15256186
+Power Supply For Domestic Use Summer (April-Sept.) per day (in Hours),0.07848633
+Current Fallows Area (in Hectares),0.071237266
+Total Geographical Area (in Hectares),0.054294027
+terrain_roughness,0.053169627
+dist_to_nearest_river_km,0.051040146
+Power Supply For All Users Summer (April-Sept.) per day (in Hours),0.038877133
+Total Population of Village,0.03524434
+Power Supply For Domestic Use Winter (Oct.-March) per day (in Hours),0.03331186
+Fallows Land other than Current Fallows Area (in Hectares),0.028590987
+Hand Pump Functioning All round the year (Status A(1)/NA(2)),0.025825847
+dist_to_nearest_road_km,0.02471557
+Power Supply For Agriculture Use Winter (Oct.-March)per day (in Hours),0.019459886
+Barren & Un-cultivable Land Area (in Hectares),0.017481696
+Forest Area (in Hectares),0.015313915
+Tube Wells/Borehole (Status A(1)/NA(2)),0.015119939
+Hand Pump (Status A(1)/NA(2)),0.014267432
+Power Supply For Commercial Use Summer (April-Sept.) per day (in Hours),0.014208918
+Uncovered  Well Functioning All round the year (Status A(1)/NA(2)),0.013930937
+Tube Wells/Borehole Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.012762506
+All Weather Road (Status A(1)/NA(2)),0.011399386
+Tube Wells/Borehole Functioning All round the year (Status A(1)/NA(2)),0.010821977
+is_lowland,0.010556431
+Power Supply For Agriculture Use Summer (April-Sept.) per day (in Hours),0.009926065
+Uncovered  Well Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.008435096
+Power Supply For All Users Winter (Oct.-March) per day (in Hours),0.0073749875
+Covered Well Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0071084155
+Uncovered  Well (Status A(1)/NA(2)),0.006946152
+Wells/Tube Wells Area (in Hectares),0.00676188
+Whether Drain water is discharged directly into water bodies or to sewar plant (For Water Bodies-1/Sewar Plants-2),0.0062484075
+Power Supply For Commercial Use Winter (Oct.-March) per day (in Hours),0.005884235
+Power Supply For Domestic Use  (Status A(1)/NA(2)),0.005641576
+Tap Water Untreated (Status A(1)/NA(2)),0.003077679
+Covered Well (Status A(1)/NA(2)),0.002211452
+Power Supply For All Users (Status A(1)/NA(2)),0.002071749
+Covered Well Functioning All round the year (Status A(1)/NA(2)),0.0019936492
+Spring Functioning All round the year (Status A(1)/NA(2)),0.0017331681
+Black Topped (pucca) Road (Status A(1)/NA(2)),0.0013611986
+Spring Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0010616662
+Tap Water-Treated Functioning All round the year (Status A(1)/NA(2)),0.0009651673
+Tap Water Untreated Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0009350126
+near_major_river,0.00090845325
+Tap Water Untreated Functioning All round the year (Status A(1)/NA(2)),0.00087288435
+Hand Pump Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.000853933
+Spring (Status A(1)/NA(2)),0.000593862
+Power Supply For Agriculture Use (Status A(1)/NA(2)),0.0004108425
+Waterfall Area (in Hectares),0.0003077027
+Tap Water-Treated (Status A(1)/NA(2)),0.0
+Tap Water-Treated Functioning in Summer months (April-September) (Status A(1)/NA(2)),0.0
+Power Supply For Commercial Use (Status A(1)/NA(2)),0.0

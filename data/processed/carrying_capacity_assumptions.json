@@ -1,0 +1,22 @@
+{
+  "per_capita_land_ha": 0.1,
+  "per_capita_water_liters_per_day": 55,
+  "water_source_capacity_people": 200,
+  "spring_source_capacity_people": 150,
+  "school_norm_per_1000_pop": 1,
+  "hospital_norm_per_5000_pop": 1,
+  "road_density_adequate_km_per_km2": 2,
+  "slope_buildable_threshold_degrees": 15,
+  "composite_weights": {
+    "land": 0.4,
+    "water": 0.3,
+    "infrastructure": 0.3
+  },
+  "sources": [
+    "Rural Planning Committee land norms",
+    "CPHEEO water supply standards",
+    "RTE Act school norms",
+    "IPHS hospital planning standards",
+    "IS 875 construction slope limits"
+  ]
+}

@@ -13,12 +13,13 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | Metric | Value |
 |--------|-------|
 | Villages Assessed | **43,996** across 7 states |
-| Model AUC-ROC | **99.94%** |
-| Model Recall | **98.9%** |
-| Model Precision | **99.3%** |
+| **Historical Model** AUC-ROC | **99.94%** (random CV) |
+| Historical Model Features | **66** (60 original + 6 flood) |
+| **Susceptibility Model** Random CV AUC | **0.978** |
+| Susceptibility Model Spatial CV AUC | **0.685** (LOSO), **0.770** (LODO) |
+| Susceptibility Model Features | **59** (leakage-free) |
 | EM-DAT Ground Truth Validation | **99.9%** detection rate |
 | HIGH Priority Villages | **13,199** (30%) |
-| Features Used | **66** (60 original + 6 flood) |
 | Model Version | **v1.0** |
 
 ### Risk Zone Distribution
@@ -89,6 +90,39 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 3. **Feature importance via SHAP** — provides explainability for every prediction
 4. **Fast inference** — can score 44K villages in <1 second
 5. **Proven for geospatial tabular data** — outperforms neural networks on structured datasets
+
+---
+
+## 🧬 Two-Model Approach
+
+This platform uses **two complementary models** to distinguish between historically-confirmed hazard zones and genuinely susceptible terrain:
+
+### Model 1: Historical Validation Model (Original)
+- **Purpose**: Validates that the model correctly identifies villages near past disasters
+- **Features**: 66 features including 7 distance/density features derived from GSI landslide and DFO flood records
+- **Label**: `high_risk = GSI landslide zone OR EM-DAT disaster zone OR DFO flood zone`
+- **Random CV AUC**: 0.9994
+- **Known limitation**: Top features (`dist_to_nearest_landslide_km`, `flood_density_50km`) are derived from the same historical events used to create the label — making the model partly circular
+
+### Model 2: Susceptibility Model (Phase 1 — Leakage-Free)
+- **Purpose**: Identifies villages that are **physically susceptible** to hazards based on terrain, rainfall, and infrastructure — regardless of whether a disaster has been recorded there
+- **Features**: 59 features (physical drivers + Census infrastructure), **zero** distance/density features from historical events
+- **Label**: Same `high_risk` binary label, but the model must learn from physical drivers alone
+- **Key features**: `elevation_m`, `max_daily_rainfall_mm`, `rain_days_per_year`, `slope_degrees`, `terrain_roughness`
+
+### Spatial Cross-Validation Results
+
+| Strategy | AUC | Recall | F1 | What it measures |
+|----------|-----|--------|-----|------------------|
+| Random 5-Fold CV | 0.978 | 0.954 | 0.947 | May overestimate due to spatial autocorrelation |
+| Leave-One-State-Out (7 folds) | 0.685 | 0.875 | 0.799 | Generalizes to unseen states |
+| Leave-One-District-Out (62 folds) | 0.770 | 0.911 | 0.760 | Generalizes to unseen districts |
+
+The **gap between random CV (0.978) and spatial CV (0.685)** reveals that the original model's 0.999 AUC was inflated by spatial autocorrelation — villages near past disasters share similar terrain features. The susceptibility model's spatial CV numbers are an honest measure of generalization.
+
+### Novel Red Zone Detection
+
+`is_novel_red_zone = TRUE` when the susceptibility model flags a village RED/HIGH but **no recorded landslide, flood, or EM-DAT event exists within the standard buffer distance**. These are the villages that current disaster inventories have missed — potentially the most important finding for proactive relocation planning.
 
 ---
 

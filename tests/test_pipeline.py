@@ -532,7 +532,7 @@ def test_bug_fixes():
 
 
 def test_carrying_capacity():
-    """Test 13: Carrying Capacity Engine."""
+    """Test 13: Carrying Capacity Engine (Phase 2)."""
     print("\n=== TEST 13: Carrying Capacity ===")
     
     path = 'data/processed/carrying_capacity.csv'
@@ -557,8 +557,8 @@ def test_carrying_capacity():
     assert_test("No negative absorbable population",
                  (df['estimated_absorbable_population'] >= 0).all())
     
-    # Limiting factors are valid
-    valid_factors = {'land', 'density', 'water', 'power', 'road', 'health', 'education'}
+    # Limiting factors are valid (Phase 2 uses land/water/infra)
+    valid_factors = {'land', 'density', 'water', 'power', 'road', 'health', 'education', 'infra'}
     actual_factors = set(df['limiting_factor'].unique())
     assert_test(f"All limiting factors valid",
                  actual_factors.issubset(valid_factors), f"got: {actual_factors}")
@@ -571,6 +571,26 @@ def test_carrying_capacity():
     # All villages are unique
     assert_test(f"All village_ids unique ({df['village_id'].nunique()} == {len(df)})",
                  df['village_id'].nunique() == len(df))
+
+    # Phase 2 specific: new columns exist
+    for col in ['buildable_land_ha', 'water_capacity_margin', 'infra_headroom_score']:
+        assert_test(f"Phase 2 column '{col}' exists", col in df.columns)
+    
+    # Buildable land is non-negative
+    assert_test("Buildable land is non-negative",
+                 (df['buildable_land_ha'] >= 0).all())
+    
+    # Water margin is in reasonable range
+    assert_test("Water margin in [-1, 5]",
+                 df['water_capacity_margin'].min() >= -1 and df['water_capacity_margin'].max() <= 5)
+    
+    # Infra headroom in [0, 1]
+    assert_test("Infra headroom in [0, 1]",
+                 df['infra_headroom_score'].min() >= 0 and df['infra_headroom_score'].max() <= 1)
+    
+    # Assumptions file exists
+    assert_test("Assumptions JSON exists",
+                 os.path.exists('data/processed/carrying_capacity_assumptions.json'))
 
 
 def test_relocation_timeline():
@@ -661,6 +681,155 @@ def test_relocation_matching():
                  target_scores.min() >= 0 and target_scores.max() <= 1)
 
 
+def test_relocation_planner():
+    """Test 15: Relocation Planner (Phase 3)."""
+    print("\n=== TEST 15: Relocation Planner ===")
+
+    path = 'data/processed/relocation_plan.csv'
+    assert_test("relocation_plan.csv exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+
+    df = pd.read_csv(path)
+    assert_test(f"Has villages (got {len(df)})", len(df) > 1000)
+
+    # Column checks
+    for col in ['red_village_id', 'red_village_name', 'green_village_id',
+                'distance_km', 'target_carrying_capacity_score',
+                'capacity_fit', 'feasibility_flag']:
+        assert_test(f"Column '{col}' exists", col in df.columns)
+
+    # Feasibility flags are valid
+    valid_flags = {'assigned', 'no_feasible_relocation_site_within_range'}
+    actual_flags = set(df['feasibility_flag'].unique())
+    assert_test(f"Feasibility flags valid",
+                 actual_flags.issubset(valid_flags), f"got: {actual_flags}")
+
+    # Assigned villages have valid distances
+    assigned = df[df['feasibility_flag'] == 'assigned']
+    if len(assigned) > 0:
+        assert_test(f"Assigned distances positive (min={assigned['distance_km'].min():.1f})",
+                     (assigned['distance_km'] > 0).all())
+        assert_test(f"Assigned distances <= 50km (max={assigned['distance_km'].max():.1f})",
+                     (assigned['distance_km'] <= 50.1).all())
+
+    # Capacity fit values are valid
+    valid_fits = {'full', 'partial', 'minimal'}
+    actual_fits = set(df['capacity_fit'].dropna().unique())
+    assert_test(f"Capacity fit values valid",
+                 actual_fits.issubset(valid_fits), f"got: {actual_fits}")
+
+    # Every RED village gets at least one candidate or is flagged
+    assert_test("Every village has a feasibility flag",
+                 df['feasibility_flag'].notna().all())
+
+    # At least 10% of RED villages are assigned
+    assigned_pct = len(assigned) / len(df) * 100
+    assert_test(f"At least 10% assigned ({assigned_pct:.1f}%)", assigned_pct >= 10)
+
+
+def test_social_vulnerability():
+    """Test 16: Social Vulnerability (Phase 4)."""
+    print("\n=== TEST 16: Social Vulnerability ===")
+
+    path = 'data/processed/social_vulnerability.csv'
+    assert_test("social_vulnerability.csv exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+
+    df = pd.read_csv(path)
+    assert_test(f"Has villages (got {len(df)})", len(df) > 10000)
+
+    # Column checks
+    for col in ['social_vulnerability_index', 'relocation_sensitivity', 'sc_st_pct']:
+        assert_test(f"Column '{col}' exists", col in df.columns)
+
+    # Vulnerability index in [0, 1]
+    vuln = df['social_vulnerability_index']
+    assert_test(f"Vulnerability in [0,1] (min={vuln.min():.3f}, max={vuln.max():.3f})",
+                 vuln.min() >= 0 and vuln.max() <= 1)
+
+    # Relocation sensitivity values valid
+    valid_sens = {'LOW', 'MEDIUM', 'HIGH'}
+    actual_sens = set(df['relocation_sensitivity'].unique())
+    assert_test(f"Sensitivity flags valid",
+                 actual_sens.issubset(valid_sens), f"got: {actual_sens}")
+
+    # SC/ST percentage in [0, 1]
+    assert_test("SC/ST pct in [0,1]",
+                 df['sc_st_pct'].min() >= 0 and df['sc_st_pct'].max() <= 1)
+
+    # Check prediction_output has new columns
+    pred_path = 'data/processed/prediction_output.csv'
+    if os.path.exists(pred_path):
+        pred = pd.read_csv(pred_path, low_memory=False, nrows=5)
+        assert_test("prediction_output has social_vulnerability_index",
+                     'social_vulnerability_index' in pred.columns)
+        assert_test("prediction_output has relocation_sensitivity",
+                     'relocation_sensitivity' in pred.columns)
+
+    # Assumptions file exists
+    assert_test("Assumptions JSON exists",
+                 os.path.exists('data/processed/social_vulnerability_assumptions.json'))
+
+
+def test_hazard_decomposition():
+    """Test 17: Multi-Hazard Decomposition (Phase 5)."""
+    print("\n=== TEST 17: Hazard Decomposition ===")
+
+    pred_path = 'data/processed/prediction_output.csv'
+    assert_test("prediction_output.csv exists", os.path.exists(pred_path))
+    if not os.path.exists(pred_path):
+        return
+
+    df = pd.read_csv(pred_path, low_memory=False)
+
+    # Column checks
+    for col in ['landslide_risk_score', 'flood_risk_score', 'recommended_action']:
+        assert_test(f"Column '{col}' exists", col in df.columns)
+
+    # Risk scores in [0, 1]
+    assert_test("Landslide risk in [0,1]",
+                 df['landslide_risk_score'].min() >= 0 and df['landslide_risk_score'].max() <= 1)
+    assert_test("Flood risk in [0,1]",
+                 df['flood_risk_score'].min() >= 0 and df['flood_risk_score'].max() <= 1)
+
+    # Recommended actions are valid
+    valid_actions = {'RELOCATE', 'MITIGATE', 'MONITOR'}
+    actual_actions = set(df['recommended_action'].unique())
+    assert_test(f"Recommended actions valid",
+                 actual_actions.issubset(valid_actions), f"got: {actual_actions}")
+
+    # All three actions are present (not empty)
+    for action in valid_actions:
+        count = (df['recommended_action'] == action).sum()
+        assert_test(f"{action} action has villages (got {count})", count > 0)
+
+    # RELOCATE villages have higher landslide risk than flood risk
+    relocate = df[df['recommended_action'] == 'RELOCATE']
+    if len(relocate) > 0:
+        assert_test("RELOCATE has higher landslide than flood risk",
+                     relocate['landslide_risk_score'].mean() > relocate['flood_risk_score'].mean())
+
+    # MITIGATE villages have higher flood risk than landslide risk
+    mitigate = df[df['recommended_action'] == 'MITIGATE']
+    if len(mitigate) > 0:
+        assert_test("MITIGATE has higher flood than landslide risk",
+                     mitigate['flood_risk_score'].mean() > mitigate['landslide_risk_score'].mean())
+
+    # Tie-break regression: Gandhia No.2 with ls >= fl*1.2 must be RELOCATE
+    # (There may be duplicate village names — check the one at the tie boundary)
+    gandhia = df[df['Village Name'] == 'Gandhia No.2']
+    if len(gandhia) > 0:
+        tie_village = gandhia[gandhia['landslide_risk_score'] >= gandhia['flood_risk_score'] * 1.2 - 5e-4]
+        if len(tie_village) > 0:
+            row = tie_village.iloc[0]
+            ls = row['landslide_risk_score']
+            fl = row['flood_risk_score']
+            assert_test(f"Gandhia No.2 tie-break: ls={ls:.4f} >= fl*1.2={fl*1.2:.5f} -> RELOCATE",
+                         row['recommended_action'] == 'RELOCATE')
+
+
 def main():
     """Run all tests."""
     global PASS, FAIL, ERRORS
@@ -685,8 +854,84 @@ def main():
         test_relocation_timeline()
         test_carrying_capacity()
         test_relocation_matching()
+        test_relocation_planner()
+        test_social_vulnerability()
+        test_hazard_decomposition()
     except Exception as e:
         print(f"\n💥 FATAL ERROR: {e}")
+        traceback.print_exc()
+        FAIL += 1
+
+    # ── TEST 15: Susceptibility Model (Phase 1) ────────────────────────
+    print(f"\n{'='*70}")
+    print("TEST 15: Susceptibility Model (Leakage-Free)")
+    print(f"{'='*70}")
+    try:
+        # Check susceptibility model files exist
+        assert os.path.exists('models/susceptibility_xgboost.json'), "Missing susceptibility model"
+        PASS += 1; print("  ✅ Susceptibility model file exists")
+
+        assert os.path.exists('models/susceptibility_features.json'), "Missing susceptibility features"
+        PASS += 1; print("  ✅ Susceptibility features file exists")
+
+        with open('models/susceptibility_features.json') as f:
+            susc_features = json.load(f)
+        assert len(susc_features) >= 50, f"Expected 50+ features, got {len(susc_features)}"
+        PASS += 1; print(f"  ✅ Susceptibility has {len(susc_features)} features")
+
+        # Verify NO leakage features in susceptibility model
+        leakage_features = [
+            'dist_to_nearest_landslide_km', 'landslide_density_50km', 'landslide_density_100km',
+            'dist_to_nearest_flood_km', 'flood_density_50km', 'flood_density_100km',
+            'flood_proxy_score'
+        ]
+        found_leakage = set(susc_features) & set(leakage_features)
+        assert len(found_leakage) == 0, f"LEAKAGE DETECTED in susceptibility model: {found_leakage}"
+        PASS += 1; print("  ✅ Zero leakage features in susceptibility model")
+
+        # Check metadata has spatial CV results
+        assert os.path.exists('models/susceptibility_model_metadata.json'), "Missing metadata"
+        with open('models/susceptibility_model_metadata.json') as f:
+            susc_meta = json.load(f)
+        assert 'cv_results' in susc_meta, "Missing cv_results in metadata"
+        assert 'spatial_cv_leave_one_state' in susc_meta['cv_results'], "Missing LOSO results"
+        PASS += 1; print("  ✅ Metadata contains spatial CV results")
+
+        # Verify random vs spatial CV gap is documented
+        random_auc = susc_meta['cv_results']['random_cv']['mean_auc']
+        loso_auc = susc_meta['cv_results']['spatial_cv_leave_one_state']['mean_auc']
+        gap = random_auc - loso_auc
+        assert gap > 0, f"Expected gap between random ({random_auc}) and spatial ({loso_auc}) CV"
+        PASS += 1; print(f"  ✅ CV gap documented: random={random_auc:.4f}, LOSO={loso_auc:.4f}, gap={gap:.4f}")
+
+        # Check prediction_output has susceptibility columns
+        pred_path = 'data/processed/prediction_output.csv'
+        if os.path.exists(pred_path):
+            import pandas as pd
+            df_pred = pd.read_csv(pred_path, low_memory=False, nrows=5)
+            if 'susceptibility_score' in df_pred.columns:
+                PASS += 1; print("  ✅ prediction_output has susceptibility_score column")
+            else:
+                FAIL += 1; ERRORS.append("Missing susceptibility_score in prediction_output")
+                print("  ❌ Missing susceptibility_score in prediction_output")
+
+            if 'susceptibility_risk_zone' in df_pred.columns:
+                PASS += 1; print("  ✅ prediction_output has susceptibility_risk_zone column")
+            else:
+                FAIL += 1; ERRORS.append("Missing susceptibility_risk_zone in prediction_output")
+                print("  ❌ Missing susceptibility_risk_zone in prediction_output")
+
+            if 'is_novel_red_zone' in df_pred.columns:
+                PASS += 1; print("  ✅ prediction_output has is_novel_red_zone column")
+            else:
+                FAIL += 1; ERRORS.append("Missing is_novel_red_zone in prediction_output")
+                print("  ❌ Missing is_novel_red_zone in prediction_output")
+        else:
+            FAIL += 1; ERRORS.append("prediction_output.csv not found")
+            print("  ❌ prediction_output.csv not found")
+
+    except Exception as e:
+        ERRORS.append(f"TEST 15: {e}")
         traceback.print_exc()
         FAIL += 1
 

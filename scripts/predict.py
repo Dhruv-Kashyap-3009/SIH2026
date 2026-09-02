@@ -174,6 +174,28 @@ def predict_all(model, features, df):
     df.loc[df['risk_score'] >= 0.7, 'predicted_risk_zone'] = 'RED'
     df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.7), 'predicted_risk_zone'] = 'ORANGE'
 
+    # ── Novel Red Zone Detection ──────────────────────────────────────────
+    # A "novel" red zone is a village flagged RED/HIGH by the susceptibility
+    # model but which has NO recorded historical landslide, flood, or EM-DAT
+    # event within the standard buffer distances.
+    # This is the headline differentiator: the model finds villages that are
+    # physically susceptible but have never experienced a recorded disaster.
+    has_landslide = df.get('gsi_landslide_zone', pd.Series(0, index=df.index)) == 1
+    has_emdat = df.get('emdat_disaster_zone', pd.Series(0, index=df.index)) == 1
+    has_flood = df.get('dfo_flood_zone', pd.Series(0, index=df.index)) == 1
+    has_historical_event = has_landslide | has_emdat | has_flood
+
+    df['is_novel_red_zone'] = (
+        (df['predicted_risk_zone'] == 'RED') &
+        (~has_historical_event)
+    )
+
+    novel_count = df['is_novel_red_zone'].sum()
+    red_count = (df['predicted_risk_zone'] == 'RED').sum()
+    if red_count > 0:
+        print(f"  Novel red zones: {novel_count:,} / {red_count:,} RED villages "
+              f"({novel_count/red_count*100:.1f}% have no recorded disaster)")
+
     # ── Relocation Timeline (PS-aligned tiers) ──────────────────────────────
     # IMMEDIATE: risk_score >= 0.85 AND (in disaster zone OR high density)
     # SHORT_TERM: risk_score >= 0.7 but not IMMEDIATE
@@ -372,6 +394,20 @@ def main():
     model_ver = _model_version()
     print(f"  ✅ Model loaded ({metadata['n_features']} features, {metadata['model_type']}, {model_ver})")
 
+    # Load susceptibility model (leakage-free) if available
+    susc_model = None
+    susc_features = None
+    susc_path = os.path.join(MODEL_DIR, 'susceptibility_xgboost.json')
+    susc_feat_path = os.path.join(MODEL_DIR, 'susceptibility_features.json')
+    if os.path.exists(susc_path) and os.path.exists(susc_feat_path):
+        susc_model = xgb.XGBClassifier()
+        susc_model.load_model(susc_path)
+        with open(susc_feat_path) as f:
+            susc_features = json.load(f)
+        print(f"  ✅ Susceptibility model loaded ({len(susc_features)} features, leakage-free)")
+    else:
+        print("  ⚠ Susceptibility model not found — skipping novel red zone detection")
+
     print("  Loading village data...")
     df = load_data()
     print(f"  ✅ Loaded {len(df):,} villages")
@@ -405,6 +441,25 @@ def main():
     print("  Running predictions + per-village SHAP...")
     df, X = predict_all(model, features, df)
     print("  ✅ Predictions complete")
+
+    # ── Susceptibility model predictions (leakage-free) ──────────────────
+    if susc_model is not None and susc_features is not None:
+        print("  Running susceptibility model predictions...")
+        susc_available = [f for f in susc_features if f in df.columns]
+        X_susc = df[susc_available].copy()
+        X_susc = X_susc.fillna(X_susc.median())
+        susc_probs = susc_model.predict_proba(X_susc)[:, 1]
+        df['susceptibility_score'] = susc_probs
+        df['susceptibility_risk_zone'] = 'GREEN'
+        df.loc[susc_probs >= 0.7, 'susceptibility_risk_zone'] = 'RED'
+        df.loc[(susc_probs >= 0.4) & (susc_probs < 0.7), 'susceptibility_risk_zone'] = 'ORANGE'
+        susc_red = (df['susceptibility_risk_zone'] == 'RED').sum()
+        print(f"  ✅ Susceptibility: RED={susc_red:,}, "
+              f"ORANGE={(df['susceptibility_risk_zone']=='ORANGE').sum():,}, "
+              f"GREEN={(df['susceptibility_risk_zone']=='GREEN').sum():,}")
+    else:
+        df['susceptibility_score'] = None
+        df['susceptibility_risk_zone'] = None
 
     # ── Add timestamps + model version ───────────────────────────────────
     predicted_at = datetime.now(timezone.utc).isoformat()

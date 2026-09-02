@@ -110,7 +110,13 @@ def extract_srtm_features(villages_df):
                         
                         if not np.all(np.isnan(window)):
                             # Compute slope using gradient
-                            dy, dx = np.gradient(window, src.res[0])
+                            # BUG FIX: SRTM is in EPSG:4326 (degrees), so we must
+                            # convert pixel size from degrees to meters before computing
+                            # rise/run. Otherwise slope blows up to ~90° for every village.
+                            lat_rad = np.radians(lat)
+                            pixel_m_x = src.res[0] * 111320 * np.cos(lat_rad)  # longitude
+                            pixel_m_y = src.res[1] * 111320  # latitude (~111km/degree)
+                            dy, dx = np.gradient(window, pixel_m_y, pixel_m_x)
                             slope_rad = np.arctan(np.sqrt(dx**2 + dy**2))
                             slope[idx] = np.nanmean(np.degrees(slope_rad))
                             

@@ -2,6 +2,32 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Full-state VYOMA export + data/processed cleanup (Sep 2026)
+
+### Full 7-state frontend export
+- `scripts/generate_vyoma_export.py` (all-states mode) now writes clearly-named outputs instead of the ambiguous `vyoma_export.json`:
+  - `data/processed/vyoma_export_all_states.json` — **43,996 villages** (all 7 NE states; RED 27,881 / ORANGE 3,548 / GREEN 12,567)
+  - `data/processed/vyoma_sites_export_all_states.json` — **12,211 canonical-GREEN sites**
+  - **9,972 villages carry a non-null `recommended_site_id`**; every id resolves to a site row (verified).
+- The state-filtered path is unchanged (`vyoma_export_mizoram.json` etc. kept as a small test fixture).
+- `tests/validate_vyoma_export.py` now validates BOTH pairs (Mizoram fixture + full all-states export) — 19 schema checks each, all passing. `.gitignore` updated for the new filenames (42.5 MB village + 5.1 MB sites JSONs stay off GitHub).
+
+### data/processed/ cleanup — removed files (all regenerable or superseded)
+- **`frontend_data.json`** (20 MB, git-tracked) — pre-VYOMA “frontend data” attempt from Aug 31 with **zero code references**; superseded by `generate_vyoma_export.py`. Deleted.
+- **`test_output.csv`** (87 MB) — leftover debug/scratch file with **zero code references**. Deleted.
+- **`relocation_matches.csv`** (7.7 MB) — written only by `match_relocation_sites.py`, which nothing in the current pipeline invokes (`relocation_planner.py` superseded it; the VYOMA export consumes `relocation_plan.csv` + `relocation_sites.*` only). Its targets predated the canonical-GREEN-only fix, so it could still recommend villages now flagged RED/ORANGE. Deleted by decision; `match_relocation_sites.py` marked SUPERSEDED in its docstring; `test_pipeline.py` Test 14 repointed from the removed file to the canonical `relocation_sites.csv/.json` register (register-size, canonical-GREEN purity, capacity bookkeeping, CSV↔JSON agreement). The FastAPI demo endpoint `/api/matches/{village_id}` degrades to its existing graceful 404 if called.
+- **`vyoma_export.json` / `vyoma_sites_export.json`** — superseded duplicates of the renamed all-states exports. Deleted.
+- **`data/processed/maps/`** — empty directory (recreated by `phase4_visualization.py` on demand). Removed.
+- **`ne_india_village_features_model_input.csv`** (new, 43,996 × 64) — slim model-input copy: `habitation_id` (joined from `prediction_output.csv` via Village Code), latitude, longitude, state, district + the exact 59 `models/susceptibility_features.json` columns. The full 450-column feature matrix is **kept** — ~20 scripts and tests still read raw Census columns from it.
+
+### Kept as-is (canonical outputs / methodology docs)
+`prediction_output.csv`, `carrying_capacity.csv`, `carrying_capacity_assumptions.json`, `social_vulnerability.csv`, `social_vulnerability_assumptions.json`, `relocation_plan.csv`, `relocation_capacity_pool.csv`, `relocation_sites.csv/.json`, plus the Mizoram and all-states VYOMA exports.
+
+### Post-cleanup redundancy audit (follow-up)
+- **`village_risk_labels.csv` removed.** Verified fully redundant: all 15 of its columns exist identically in `ne_india_village_features.csv` (same row count 43,996; `high_risk` 29,900/14,096 and `risk_zone` RED 27,881 / ORANGE 11,381 / GREEN 4,734 match exactly), it has **no stable join key** (no Village Code) and **zero consumers** — only `create_labels.py`/`update_labels_flood.py` write it. Labels remain available as columns in the feature matrix; both label scripts re-create the standalone file on demand if ever needed.
+- **`relocation_capacity_pool.csv` cleaned at source**: it carried duplicate `state.1`/`district.1` columns (exact copies of `state`/`district`) caused by a rename collision in `generate_relocation_sites.py` (carrying-capacity frame already has lowercase state/district AND the pred join adds uppercase State/District Name). Pool is now built directly from the carrying-capacity frame filtered to the eligible ids — 13 clean columns, same 12,211 rows. Sites register unchanged.
+- **Verified NOT redundant** (kept): `social_vulnerability.csv` (full-precision index differs from the 4-decimal-rounded copy in prediction_output by ≤0.0005, plus component columns not elsewhere; read by tests), `relocation_sites.csv` + `.json` (dual serialization of one register — CSV consumed by tests, JSON by the export), Mizoram exports (strict subsets of all-states, kept as small git-tracked fixtures), `ne_india_village_features_model_input.csv` (strict column subset of the feature matrix + identifiers — declared model-input interface). The 7 feature-matrix columns absent from prediction_output (`model_prediction`, `prediction_mean`, `soft_risk_*`, `slope_x_rainfall`, `twi_proxy`) all have producer scripts and are diagnostic/train-time or rejected-experiment columns deliberately excluded from the model and exports — not orphaned data.
+
 ## [Unreleased] — Final Review Fixes (threshold model-consistency + Q5 verification)
 
 ### Fix A: threshold calibrated AND applied on the susceptibility model

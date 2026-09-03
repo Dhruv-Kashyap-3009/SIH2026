@@ -225,7 +225,8 @@ def main():
     print("\n[7] All-state export path")
     code3, out3 = run_script(['scripts/generate_vyoma_export.py'])
     check("generate_vyoma_export.py (all states) exits 0", code3 == 0, out3[-500:])
-    allv = json.load(open(os.path.join(DATA, 'vyoma_export.json'), encoding='utf-8'))
+    allv = json.load(open(os.path.join(DATA, 'vyoma_export_all_states.json'),
+                           encoding='utf-8'))
     check("43,996 villages in full export", len(allv) == 43996, len(allv))
     all_ids = [x['village_id'] for x in allv]
     check("village_id unique in full export", len(set(all_ids)) == 43996)

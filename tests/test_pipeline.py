@@ -752,48 +752,62 @@ def test_relocation_timeline():
 
 
 def test_relocation_matching():
-    """Test 14: Relocation Site Matching."""
-    print("\n=== TEST 14: Relocation Matching ===")
-    
-    path = 'data/processed/relocation_matches.csv'
-    assert_test("relocation_matches.csv exists", os.path.exists(path))
-    if not os.path.exists(path):
+    """Test 14: Relocation Site Register.
+
+    NOTE: the legacy data/processed/relocation_matches.csv (written by
+    scripts/match_relocation_sites.py) was removed in the data/processed
+    cleanup — that matcher was superseded by relocation_planner.py, and the
+    VYOMA export consumes relocation_plan.csv + relocation_sites.* only.
+    This test now validates the canonical register instead.
+    """
+    print("\n=== TEST 14: Relocation Site Register ===")
+
+    csv_path = 'data/processed/relocation_sites.csv'
+    json_path = 'data/processed/relocation_sites.json'
+    assert_test("relocation_sites.csv exists", os.path.exists(csv_path))
+    assert_test("relocation_sites.json exists", os.path.exists(json_path))
+    if not (os.path.exists(csv_path) and os.path.exists(json_path)):
         return
-    
-    df = pd.read_csv(path)
-    assert_test(f"Has matches (got {len(df)})", len(df) > 1000)
-    
+
+    df = pd.read_csv(csv_path)
+    assert_test(f"Has sites (got {len(df)})", len(df) > 1000)
+
     # Column checks
-    for col in ['source_village_id', 'target_village_id', 'distance_km',
-                'target_carrying_capacity_score', 'target_remaining_capacity']:
+    for col in ['site_id', 'name', 'district', 'state', 'suitability_score',
+                'total_capacity', 'occupied', 'available', 'is_ideal']:
         assert_test(f"Column '{col}' exists", col in df.columns)
-    
-    # Distances are positive (where not NaN)
-    valid_dist = df['distance_km'].dropna()
-    assert_test(f"Distances positive (min={valid_dist.min():.1f})",
-                 (valid_dist >= 0).all())
-    
-    # Distances within radius (50km)
-    assert_test(f"Distances <= 50km (max={valid_dist.max():.1f})",
-                 (valid_dist <= 50.1).all())  # small tolerance
-    
-    # No village allocated beyond its capacity
-    # (remaining_capacity should never go below 0)
-    remaining = df['target_remaining_capacity'].dropna()
-    assert_test(f"No negative remaining capacity (min={remaining.min():.0f})",
-                 (remaining >= 0).all())
-    
-    # Every source village has at least one match or is flagged
-    sources_with_match = df[df['target_village_id'] != 'NO_SAFE_SITE_FOUND']['source_village_id'].nunique()
-    sources_no_match = df[df['target_village_id'] == 'NO_SAFE_SITE_FOUND']['source_village_id'].nunique()
-    total_sources = df['source_village_id'].nunique()
-    assert_test(f"All source villages accounted for ({sources_with_match} matched + {sources_no_match} no-match = {total_sources})",
-                 sources_with_match + sources_no_match == total_sources)
-    
-    # Target carrying capacity scores in [0, 1]
-    target_scores = df['target_carrying_capacity_score'].dropna()
-    assert_test(f"Target capacity scores in [0,1]",
-                 target_scores.min() >= 0 and target_scores.max() <= 1)
+
+    # All register sites are canonical GREEN (never relocate into a zone the
+    # export itself flags RED/ORANGE) — the headline safety invariant.
+    pred = pd.read_csv('data/processed/prediction_output.csv', low_memory=False,
+                       usecols=['habitation_id', 'susceptibility_risk_zone'])
+    zone_by_hid = pred.set_index('habitation_id')['susceptibility_risk_zone']
+    bad = [sid for sid in df['site_id'] if zone_by_hid.get(sid) != 'GREEN']
+    assert_test("0 register sites are canonical RED/ORANGE",
+                len(bad) == 0, f"got {len(bad)}")
+
+    # Capacity bookkeeping: available == max(0, total - occupied)
+    # (occupied may exceed total_capacity: it is the FULL population of villages
+    #  routed to a site, per the VYOMA definition — a large red village can be
+    #  sent to the only candidate within range even when only part is absorbable,
+    #  which capacity_fit='minimal'/'partial' in relocation_plan.csv flags.
+    #  available is then clipped to 0. This matches validate_vyoma_export.)
+    ok = ((df['available'] == (df['total_capacity'] - df['occupied'])
+           .clip(lower=0)).all())
+    assert_test("available == max(0, total_capacity - occupied)", ok)
+    assert_test("occupied and total_capacity are non-negative",
+                (df['occupied'] >= 0).all() and (df['total_capacity'] >= 0).all())
+
+    # suitability_score in [0, 100] (carrying_capacity_score * 100)
+    assert_test("suitability_score in [0,100]",
+                df['suitability_score'].min() >= 0
+                and df['suitability_score'].max() <= 100)
+
+    # CSV and JSON register agree (same site count)
+    import json
+    js = json.load(open(json_path, encoding='utf-8'))
+    assert_test("relocation_sites.csv and .json agree on site count",
+                len(js) == len(df), f"csv={len(df)} json={len(js)}")
 
 
 def test_relocation_planner():

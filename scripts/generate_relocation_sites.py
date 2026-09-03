@@ -221,18 +221,22 @@ def main():
         merged = merged[elig].copy()
         # Also persist the eligible pool in carrying-capacity schema so
         # relocation_planner.py plans against exactly these sites.
-        pool = merged.rename(columns={
-            'village_name': 'village_name', 'State Name': 'state',
-            'District Name': 'district', 'susceptibility_risk_zone': '_zone'})
+        # Built from the ORIGINAL carrying-capacity frame (its schema already
+        # matches pool_cols exactly) filtered to the eligible village_ids — NOT
+        # by renaming columns on `merged`, which carries both the cc lowercase
+        # state/district and the pred uppercase State/District Name and would
+        # produce duplicate state/state.1, district/district.1 columns.
         pool_cols = ['village_id', 'village_name', 'state', 'district',
                      'latitude', 'longitude', 'buildable_land_ha',
                      'water_capacity_margin', 'infra_headroom_score',
                      'carrying_capacity_score', 'estimated_absorbable_population',
                      'limiting_factor', 'risk_zone']
+        elig_ids = set(merged['village_id'])
+        pool = cc[cc['village_id'].isin(elig_ids)][pool_cols]
         pool_path = os.path.join(DATA_DIR, 'relocation_capacity_pool.csv')
-        pool[[c for c in pool_cols if c in pool.columns]].to_csv(pool_path, index=False)
+        pool.to_csv(pool_path, index=False)
         print(f"  Pool for relocation_planner --capacity saved: {pool_path} "
-              f"({len(merged):,} eligible sites)")
+              f"({len(pool):,} eligible sites)")
 
     # Infrastructure booleans (1 == available / numbers > 0). Computed on the
     # prediction/census frame (indexed by Village Code) then mapped onto the

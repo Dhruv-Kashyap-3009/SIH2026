@@ -141,7 +141,13 @@ def _iso_parseable(s):
 
 if __name__ == '__main__':
     ok = True
-    for pair in [('vyoma_export_mizoram.json', 'vyoma_sites_export_mizoram.json')]:
+    pairs = [
+        # Quick test fixture (Mizoram, 830 villages)
+        ('vyoma_export_mizoram.json', 'vyoma_sites_export_mizoram.json'),
+        # Full handoff (all 7 NE states, 43,996 villages)
+        ('vyoma_export_all_states.json', 'vyoma_sites_export_all_states.json'),
+    ]
+    for pair in pairs:
         ok = validate(os.path.join(DATA_DIR, pair[0]),
                       os.path.join(DATA_DIR, pair[1])) and ok
     sys.exit(0 if ok else 1)

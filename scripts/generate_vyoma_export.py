@@ -35,6 +35,11 @@ for "what VYOMA sees".
 Sites export mirrors data/processed/relocation_sites.json (site_id == the
 GREEN village's habitation_id, so recommended_site_id always resolves).
 
+Outputs (all states): data/processed/vyoma_export_all_states.json +
+data/processed/vyoma_sites_export_all_states.json
+State-filtered:      data/processed/vyoma_export_<state>.json +
+data/processed/vyoma_sites_export_<state>.json (e.g. vyoma_export_mizoram.json)
+
 Usage:
   python scripts/generate_vyoma_export.py                  # all states
   python scripts/generate_vyoma_export.py --state Mizoram  # state-filtered
@@ -212,8 +217,8 @@ def main():
         vpath = os.path.join(DATA_DIR, f'vyoma_export_{_slug(args.state)}.json')
         spath = os.path.join(DATA_DIR, f'vyoma_sites_export_{_slug(args.state)}.json')
     else:
-        vpath = os.path.join(DATA_DIR, 'vyoma_export.json')
-        spath = os.path.join(DATA_DIR, 'vyoma_sites_export.json')
+        vpath = os.path.join(DATA_DIR, 'vyoma_export_all_states.json')
+        spath = os.path.join(DATA_DIR, 'vyoma_sites_export_all_states.json')
 
     with open(vpath, 'w') as f:
         json.dump(villages, f)

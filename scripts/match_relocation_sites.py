@@ -2,6 +2,15 @@
 """
 Task 1b: Relocation Site Matching
 
+SUPERSEDED (2026-09-03): this matcher predates the canonical-GREEN-only fix and
+is no longer part of the active pipeline — relocation_planner.py (+ capacity
+pool from generate_relocation_sites.py) is the canonical assignment logic, and
+the VYOMA export consumes relocation_plan.csv / relocation_sites.* only. Its
+output file data/processed/relocation_matches.csv was removed in the
+data/processed cleanup. Do NOT re-introduce it as the relocation source without
+a canonical-GREEN eligibility filter.
+
+Original behavior (kept for reference):
 For every RED (and HIGH-priority ORANGE) village, find the top 3 candidate
 GREEN/safe villages within a configurable radius (default 50km), ranked by a
 combined score of carrying_capacity_score and inverse distance.

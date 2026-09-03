@@ -2,6 +2,78 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Backend Tier-1 performance (gzip + response cache) (Sep 2026)
+
+- **Root cause of UI lag**: every page load re-queried the remote Neon DB (us-east-2) for all 43,996 rows — ~250 ms network round trip per request, plus a 40 MB/5–11 MB JSON transfer and browser-side render of tens of thousands of rows.
+- `backend/src/index.ts` additions:
+  - **gzip compression** (`compression` middleware) — the 11.2 MB compact villages payload transfers as **1.51 MB (~7.4× smaller)**; JSON is ~90% compressible.
+  - **In-memory GET response cache** — first request per URL hits Postgres; every repeat within the TTL is answered from RAM with the pre-serialized payload (no re-stringify, no DB). Only successful 2xx/3xx responses are cached; errors (404/500) and `/api/health` never are. Eviction: TTL expiry (`CACHE_MAX_AGE_SECONDS`, default 300 s), 200-entry cap, 16 MB per-response cap. After re-seeding, restart the server (or wait out the TTL) to invalidate.
+  - `Cache-Control: public, max-age=…` + `X-Cache: HIT/MISS` headers on every cached route.
+- **Measured live against Neon (43,996 villages)**: `/api/villages?compact=1` **40.06 s cold → 0.051 s cached (~780×)**, payloads byte-identical; `/api/dashboard` **3.93 s cold → 0.003 s cached**; district-filtered list 1.22 s → 0.0035 s; gzip confirmed on cached hits (`Content-Encoding: gzip`); 404s verified never cached.
+- New dep: `compression` + `@types/compression` in `backend/`.
+- Note: the remaining cold-cache cost on the first visit per URL is the DB read itself (10–40 s at 44k rows over remote Neon); Tier 2 (client-side filtering of one compact fetch / pagination / static-file serving) removes even that.
+
+## [Unreleased] — Map color fidelity at all zoom levels (Sep 2026)
+
+- `GisMap` no longer swaps to a density heatmap when zoomed out. The low-zoom heatmap blended every village toward a red “blur” regardless of true risk color; risk-colored dots (`RED`/`ORANGE`/`GREEN`) are now rendered at **every** zoom level (`villages-circle` minzoom 0). Dot radius and stroke scale with zoom (≈2.5 px at z0 → 8 px at z15) so 44k points stay legible when zoomed out.
+- RED pulse halo now only appears above zoom 8 (was 11.5) so it never tints neighboring ORANGE/GREEN dots red at wide views.
+- Removed the now-stale “Risk density (zoomed out)” legend row from both `MapPage` and the dashboard `MapPanel` legend.
+- Verified live at zoom 6 against the real dataset: `queryRenderedFeatures` returns 40,097 circle features spanning all three risk colors (RED 26,607 / ORANGE 3,413 / GREEN 10,077); no heatmap layer present.
+
+## [Unreleased] — Live Neon setup: seed strategy + env fixes (Sep 2026)
+
+- `backend/.env` created with the real Neon `DATABASE_URL` (gitignored — never committed).
+- `backend/src/seed.ts` now imports `dotenv/config` so `npm run seed` loads `.env` (Prisma 6's runtime client does not auto-load it — `index.ts` already did this; the seed did not).
+- Seed switched from per-row `upsert` to a **snapshot reload** (clear tables + chunked `createMany`, 5,000/batch): per-row upserts over remote Neon run at ~4 rows/s (43,996 villages would take ~3 hours); bulk insert finished in minutes. The exports are the source of truth; stale rows are removed by design. `SEED_DATA_DIR` / `SEED_VILLAGES_FILE` / `SEED_SITES_FILE` overrides unchanged.
+- Verified live against Neon: **43,996 villages + 12,211 sites**, zones RED 27,881 / ORANGE 3,548 / GREEN 12,567 and priorities IMMEDIATE 24,220 / SHORT-TERM 5,467 / MEDIUM-TERM 157 / ROUTINE 14,152 — all matching the canonical exports; 7 states present. (The teammate's 16 Kerala demo rows were cleared during the snapshot load.)
+
+## [Unreleased] — VYOMA real-data scale fixes (Sep 2026)
+
+Review of the merged app against the real 43,996-village dataset surfaced mock-era limitations; fixed in the merged frontend/backend:
+
+### Backend (Express API)
+- `GET /api/villages/districts?state=…` — new endpoint returning the real Census district names per state (registered before `/:id` so it can't be swallowed as a village lookup). Powers the cascading State→District selector.
+- `GET /api/villages?compact=1` — slim projection (11 map/table fields: id, name, district, state, coords, population, risk_score, risk_level, relocation_priority, low_confidence). The full 16-field objects include heavy per-row `top_factors` JSON; at 44k rows that is ~40 MB vs ~5 MB compact.
+- `GET /api/villages` / `GET /api/sites` — optional server-side pagination `?limit=` `?offset=` (applied after the existing sort).
+- `GET /api/dashboard` — now also returns `predicted_at` (most recent `prediction_timestamp`) and `model_version` so the UI's "last updated / model version" is real data, never hardcoded.
+
+### Frontend (React)
+- `SelectionContext`: districts are loaded live from the new endpoint per selected state (with stale-response guard) instead of the hardcoded 3-per-state placeholder list (which contained non-districts like “Itanagar” and couldn't reach most of the ~180 real districts). `TopBar` disables the district dropdown while loading.
+- `GisMap`: fixed an async-data bug — the GeoJSON source was built once from the mount-time village array, so the dashboard map stayed empty after the API query resolved; the source now updates whenever `villages` change. Default view moved from Idukki (Kerala mock) to NE India ([93.5, 25.8], zoom 6); selecting a district now flies the viewport to that district's villages.
+- Payload discipline: dashboard map + critical-habitations table share one `compact=1` fetch; Habitations / Priority / Map pages use `compact=1` too (Analytics keeps the full fetch because it aggregates `top_factors`).
+- DOM caps at real scale: Kanban renders top 100 per lane (was rendering all 24k IMMEDIATE cards); the dashboard site-capacity card shows the top 30 most-utilized of 12,211 sites with a real count note.
+- Dashboard header + stat cards now show real values (`Predicted {timestamp} · {model_version}`, low-confidence counts, GREEN count, sites available) instead of demo chrome (“Last updated: 14:30”, “+1 this week”, “verified”).
+
+### Additional defects found & fixed during the live E2E test pass
+- **`/analytics` crashed on entry** (`ReferenceError: SkeletonBars is not defined`) — the loading skeleton used `SkeletonBars` but the import only pulled `SkeletonLoader, SkeletonCards`. Latent in the teammate code; only visible once a real backend serves data (loading state renders first). Fixed the import.
+- **Recharts duplicate-key warning** in the site-capacity chart — real Census data has same-named villages in different districts and the truncated chart label collided. Cells now key on `site_id`.
+- Oversubscribed sites (>100% occupied — documented semantics) rendered `>100%` bar widths; the card now clamps the bar at 100% and labels it `>100%`.
+
+### Verification (live E2E against a real database)
+- Booted an **embedded PostgreSQL**, `prisma db push`, and ran the real seed (`SEED_VILLAGES_FILE=vyoma_export_mizoram.json` + `SEED_SITES_FILE=vyoma_sites_export_mizoram.json`) — 830 villages + 53 sites upserted, vocabulary translation applied (`MONITOR → ROUTINE ×26`).
+- Exercised every endpoint against the live DB: `/api/villages/districts` returns the 8 real Mizoram Census districts (empty for unknown states); `?compact=1` returns exactly 11 fields × 830 rows sorted by risk desc; full rows keep `top_factors`/`model_version`; `?limit=`/`?offset=` slide correctly; `district`/`risk_level` filters and `/villages/:id` + `/sites/:id` (incl. 404s) all correct; `/api/villages/districts` is not swallowed by `/:id`; `/api/dashboard` counts match row-level recomputation (RED 810 / ORANGE 9 / GREEN 11), priority keys are the UI taxonomy (`SHORT-TERM`/`ROUTINE`), `predicted_at` ISO + `model_version v1.1-susceptibility` present, capacity bookkeeping intact — **39/39 assertions passed** (2 initial failures were wrong test expectations, not app bugs).
+- Live UI drive: dashboard header shows `Predicted Sep 2, 2026 · v1.1-susceptibility`; stat cards 810/9/11 with real details; top-6 critical table; map tiles confirm the NE-India default center (zoom-7 tiles at x≈96/y≈54 — Kerala would be x≈27/y≈62); Villages table renders all 830 rows; State→District cascade loads the real districts from the API and filtering to Aizawl returns 104/104 villages; Priority kanban shows IMMEDIATE 804 with “+704 more (top 100 by risk)”; village detail (Aibawk) renders full factors/site info; Analytics renders all 6 charts. Zero JS exceptions after the fixes.
+
+## [Unreleased] — VYOMA frontend/backend code merged into the repo (Sep 2026)
+
+### What happened
+- The teammate's **VYOMA web application** (from the `Vyoma-main` zip) was merged into this repo so the model outputs and the UI that consumes them live together:
+  - `frontend/` — React 18 + Vite + Tailwind + MapLibre GL + TanStack Query dashboard (11 routes; dev server :5173). Old single-file demo page replaced.
+  - `backend/` — Express + TypeScript + Prisma + PostgreSQL API (routes: villages, sites, dashboard, health; :3001). Old FastAPI demo backend replaced.
+- The teammate's **`mockData/` demo dataset was intentionally NOT merged** (placeholder Kerala demo data — superseded by real model exports).
+- Old demo dashboard files removed (all still in git history): `frontend/index.html` (single-page Leaflet map), `backend/main.py` + `backend/requirements.txt` (FastAPI server), `run_dashboard.sh`.
+- Docs: README gained a “VYOMA Application (merged frontend/backend)” section (structure, run steps, vocabulary note); Project Structure tree updated.
+
+### Seed wiring — real model data, no mock data
+- `backend/src/seed.ts` rewritten to ingest **`data/processed/vyoma_export_all_states.json` (43,996 villages) + `vyoma_sites_export_all_states.json` (12,211 sites)** instead of `mockData/*.json`. Env overrides: `SEED_DATA_DIR`, `SEED_VILLAGES_FILE`, `SEED_SITES_FILE`; clear error message if exports are missing (tells the user to run `generate_vyoma_export.py` / `generate_relocation_sites.py`). Progress logged every 5,000 rows.
+- Pre-seed validation (run against the live exports): all 43,996 village rows have the 16 required fields, correct types, in-range Ints, parseable ISO timestamps, non-empty `top_factors`; all 12,211 site rows have complete 6-key boolean `infrastructure`; site ids unique; **0 dangling `recommended_site_id`** — zero errors.
+- **Relocation-priority vocabulary translation** at seed time (model → UI): `SHORT_TERM → SHORT-TERM`, `MEDIUM_TERM → MEDIUM-TERM`, `MONITOR → ROUTINE` (IMMEDIATE passes through) so the DB matches the kanban lanes / dashboard counts the UI hardcodes (`IMMEDIATE`/`SHORT-TERM`/`MEDIUM-TERM`/`ROUTINE` — verified in `PriorityPage.jsx`, `KanbanBoard.jsx`, `dashboard.ts`). Applied counts: IMMEDIATE 24,220 · SHORT-TERM 5,467 · MEDIUM-TERM 157 · ROUTINE 14,152. `prediction_output.csv` keeps the model's original vocabulary.
+
+### Verification
+- Frontend: `npm install` + `npm run build` — clean (703 modules; only a chunk-size advisory). Dev server smoke-tested — app renders (sidebar, dashboard, MapLibre map), zero JS errors; the only console noise is `ERR_CONNECTION_REFUSED` to :3001 when the backend isn't running (documented ErrorState behavior).
+- Backend: `npm install` + `npx prisma generate` + `npx tsc --noEmit` — clean.
+- `.gitignore` additions: `node_modules/`, `frontend/dist/`, `backend/dist/`, `frontend/.env*`, `backend/.env*`, `backend/prisma/migrations/`.
+
 ## [Unreleased] — Full-state VYOMA export + data/processed cleanup (Sep 2026)
 
 ### Full 7-state frontend export

@@ -21,6 +21,16 @@ __pycache__/
 *.pyo
 .ipynb_checkpoints/
 
+# Node / VYOMA frontend (React + Vite) and backend (Express + Prisma)
+node_modules/
+frontend/dist/
+backend/dist/
+frontend/.env
+frontend/.env.local
+backend/.env
+backend/.env.local
+backend/prisma/migrations/
+
 # OS
 .DS_Store
 Thumbs.db

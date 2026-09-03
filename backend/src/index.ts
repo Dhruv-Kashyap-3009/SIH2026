@@ -1,0 +1,142 @@
+/**
+ * VYOMA API Server
+ *
+ * Express + Prisma + PostgreSQL backend.
+ * Run: npm run dev (development) or npm start (production build).
+ */
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import compression from "compression";
+
+import villagesRouter from "./routes/villages.js";
+import sitesRouter from "./routes/sites.js";
+import dashboardRouter from "./routes/dashboard.js";
+
+const app = express();
+const PORT = parseInt(process.env.PORT || "3001", 10);
+
+// ---------------------------------------------------------------------------
+// Tier-1 performance: gzip compression + in-memory GET response cache.
+//
+// The dataset behind every read endpoint is static — it only changes when the
+// model exports are re-generated and `npm run seed` is re-run. Caching GET
+// responses in RAM means the first request per URL hits Postgres and every
+// repeat within the TTL is answered from memory (microseconds vs. a ~250 ms
+// remote-DB round trip per request).
+//
+// Invalidation: the cache self-expires after CACHE_MAX_AGE_SECONDS (default 5
+// minutes, override with the env var) and is cleared entirely on server
+// restart. After re-seeding, either restart the server or wait out the TTL.
+// ---------------------------------------------------------------------------
+const CACHE_MAX_AGE_SECONDS = parseInt(
+  process.env.CACHE_MAX_AGE_SECONDS || "300",
+  10
+);
+const CACHE_MAX_ENTRIES = 200;
+const CACHE_MAX_BODY_BYTES = 16 * 1024 * 1024; // don't cache >16 MB responses
+
+/** key -> pre-serialized JSON payload */
+const responseCache = new Map<string, { payload: string; expiresAt: number }>();
+
+function cacheGet(key: string): string | undefined {
+  const entry = responseCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    responseCache.delete(key); // expired — evict and treat as a miss
+    return undefined;
+  }
+  return entry.payload;
+}
+
+function cacheSet(key: string, payload: string): void {
+  // delete-then-set refreshes insertion order (Map evicts oldest first)
+  responseCache.delete(key);
+  responseCache.set(key, {
+    payload,
+    expiresAt: Date.now() + CACHE_MAX_AGE_SECONDS * 1000,
+  });
+  while (responseCache.size > CACHE_MAX_ENTRIES) {
+    const oldest = responseCache.keys().next().value;
+    if (oldest === undefined) break;
+    responseCache.delete(oldest);
+  }
+}
+
+// Middleware — compression must be registered BEFORE the cache middleware so
+// cached responses also pass through the gzip pipe.
+app.use(cors());
+app.use(express.json());
+app.use(compression());
+
+/**
+ * Cache middleware — must run BEFORE the route handlers so it can wrap res.json.
+ */
+app.use((req, res, next) => {
+  // Only cache successful GETs; skip the health check so its timestamp stays live.
+  if (req.method !== "GET" || req.originalUrl.startsWith("/api/health")) {
+    next();
+    return;
+  }
+
+  const key = req.originalUrl; // full path + query string
+
+  const hit = cacheGet(key);
+  if (hit !== undefined) {
+    res.set("X-Cache", "HIT");
+    res.set("Cache-Control", `public, max-age=${CACHE_MAX_AGE_SECONDS}`);
+    res.set("Content-Type", "application/json; charset=utf-8");
+    res.send(hit);
+    return;
+  }
+
+  const originalJson = res.json.bind(res);
+
+  res.json = ((body: unknown) => {
+    if (res.statusCode >= 200 && res.statusCode < 400) {
+      let payload: string;
+      try {
+        payload = JSON.stringify(body);
+      } catch {
+        payload = JSON.stringify({ error: "Failed to serialize response" });
+      }
+      if (payload.length <= CACHE_MAX_BODY_BYTES) cacheSet(key, payload);
+      res.set("Cache-Control", `public, max-age=${CACHE_MAX_AGE_SECONDS}`);
+      res.set("X-Cache", "MISS");
+      res.set("Content-Type", "application/json; charset=utf-8");
+      res.send(payload);
+      return res;
+    }
+    // Errors are never cached — pass through untouched.
+    return originalJson(body);
+  }) as typeof res.json;
+
+  next();
+});
+
+// Routes
+app.use("/api/villages", villagesRouter);
+app.use("/api/sites", sitesRouter);
+app.use("/api/dashboard", dashboardRouter);
+
+// Health check
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// 404 for unmatched routes
+app.use((_req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+app.listen(PORT, () => {
+  console.log(`\n  VYOMA API server running at http://localhost:${PORT}\n`);
+  console.log("  Routes:");
+  console.log("    GET /api/villages          — list villages");
+  console.log("    GET /api/villages/:id      — single village");
+  console.log("    GET /api/sites             — list relocation sites");
+  console.log("    GET /api/sites/:id         — single site");
+  console.log("    GET /api/dashboard         — aggregate stats");
+  console.log("    GET /api/health            — health check");
+  console.log(`  Perf: gzip on · GET cache on (${CACHE_MAX_AGE_SECONDS}s TTL)\n`);
+});

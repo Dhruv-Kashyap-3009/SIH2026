@@ -54,6 +54,8 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | 📋 MEDIUM_TERM | 157 | Monitor and plan |
 | ✅ MONITOR | 14,152 | Low risk, routine monitoring |
 
+> These are the **model CSV** values (`relocation_timeline`). In the VYOMA database/UI the seed translates them to `SHORT-TERM` / `MEDIUM-TERM` / `ROUTINE` (see [VYOMA Application](#-vyoma-application-merged-frontendbackend)).
+
 ### Multi-Hazard Decomposition (Phase 5 — Susceptibility Model)
 
 > **Note:** Decomposition now uses the **susceptibility model** (59 leakage-free features) instead of the historical model. This gives a more honest attribution to genuine physical drivers rather than distance-to-past-events. Result: more villages classified as MITIGATE (flood-dominated, fortification feasible) rather than RELOCATE.
@@ -103,6 +105,42 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 **Sites:** `scripts/generate_relocation_sites.py` emits the canonical-GREEN carrying-capacity register (`data/processed/relocation_sites.csv/.json`, **12,211 sites** = the 14,109 measured candidates minus 1,898 that are RED/ORANGE under the canonical susceptibility model — destinations are never in zones the export itself flags as hazardous), with `site_id = habitation_id`, `suitability_score = carrying_capacity_score × 100`, `total_capacity` / `occupied` / `available` (from `relocation_plan.csv`), Census-derived `infrastructure` booleans, and an **`is_ideal` flag defined as `carrying_capacity_score ≥ 0.8` → 446 sites**. It also writes `relocation_capacity_pool.csv` (same eligible set, capacity schema) — pass it to `relocation_planner.py --capacity` so assignments only ever target these safe sites. The old “236 IDEAL” figure was untraceable orphaned data and is superseded.
 
 Sample (Mizoram, 830 villages): `data/processed/vyoma_export_mizoram.json` + `data/processed/vyoma_sites_export_mizoram.json`. Schema contract enforced by `tests/validate_vyoma_export.py` (19 checks).
+
+---
+
+## 🖥️ VYOMA Application (merged frontend/backend)
+
+The teammate's VYOMA web application now lives in this repo — it is the official UI for the model output:
+
+```
+frontend/   React 18 + Vite + Tailwind + MapLibre GL + TanStack Query  (dev: npm run dev → :5173)
+backend/    Express + TypeScript + Prisma + PostgreSQL                  (dev: npm run dev → :3001)
+```
+
+The app reads exactly the two export files above (all-states village + site JSONs). Its code was merged **as-is** from the teammate's repo (`mockData/` demo dataset intentionally not merged — real model exports replace it). `frontend/code.html` is the teammate's standalone single-file UI prototype; `frontend/src` is the real app.
+
+### Run it
+
+```bash
+# 1) Backend (needs a Postgres DB, e.g. Neon)
+cd backend && npm install
+# create backend/.env:  DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
+npx prisma migrate dev --name init   # or: npx prisma db push
+npm run seed                          # loads the real exports into Postgres (43,996 villages / 12,211 sites)
+npm run dev                           # http://localhost:3001
+
+# 2) Frontend
+cd frontend && npm install
+npm run dev                           # http://localhost:5173  (VITE_API_URL defaults to http://localhost:3001)
+```
+
+The seed script (`backend/src/seed.ts`) ingests `data/processed/vyoma_export_all_states.json` + `vyoma_sites_export_all_states.json` (generate first with `generate_vyoma_export.py` / `generate_relocation_sites.py` if absent; `SEED_DATA_DIR`/`SEED_VILLAGES_FILE`/`SEED_SITES_FILE` env vars override the paths).
+
+> **Vocabulary note:** the model's CSVs use `relocation_timeline` values `SHORT_TERM` / `MEDIUM_TERM` / `MONITOR`, but the VYOMA kanban/dashboard hardcode `SHORT-TERM` / `MEDIUM-TERM` / `ROUTINE`. The seed maps the model vocabulary onto the UI vocabulary (`MONITOR → ROUTINE`, underscores → hyphens); the DB/API therefore speak the UI taxonomy while `prediction_output.csv` keeps the model's original strings.
+
+> **Scale notes (real 43,996-village data):** list/map pages fetch `?compact=1` (11 map/table fields ≈ 5 MB instead of ~40 MB of full rows) and the API supports `?limit=`/`?offset=` pagination on `/api/villages` and `/api/sites`. The State→District selector loads real Census district names from `GET /api/villages/districts?state=…` (never hardcoded), the dashboard header shows the real `predicted_at` + `model_version` from `/api/dashboard`, and kanban lanes / capacity cards are capped in the DOM at real scale.
+
+> **History:** the earlier demo dashboard (single-file `frontend/index.html` Leaflet page + FastAPI `backend/main.py` + `run_dashboard.sh`) was replaced by this app — the old files remain in git history.
 
 ---
 
@@ -579,14 +617,20 @@ SIH2026/
 │   ├── fix_slope.py                    # Slope re-extraction (degree→meter fix)
 │   └── refresh_rainfall.py             # Real-time rainfall refresh (demo hook)
 │
-├── backend/                            # FastAPI GIS dashboard backend
-│   ├── main.py                         # API server (villages, SHAP, matches)
-│   └── requirements.txt
+├── backend/                            # VYOMA API server (Express + TypeScript + Prisma + Postgres)
+│   ├── package.json                    # npm run dev / build / seed / migrate
+│   ├── prisma/schema.prisma            # Village + RelocationSite models
+│   ├── tsconfig.json
+│   └── src/                            # index.ts (API :3001), seed.ts (loads real exports),
+│                                       #   lib/prisma.ts, routes/ (villages, sites, dashboard)
 │
-├── frontend/                           # GIS dashboard frontend
-│   └── index.html                      # Leaflet map + marker clustering
-│
-├── run_dashboard.sh                    # One-command dashboard startup
+├── frontend/                           # VYOMA dashboard (React 18 + Vite + Tailwind + MapLibre)
+│   ├── index.html                      # Vite entry
+│   ├── code.html                       # Standalone single-file UI prototype (teammate artifact)
+│   ├── package.json                    # npm run dev / build / preview
+│   ├── vite.config.js · tailwind.config.js · postcss.config.js
+│   └── src/                            # App.jsx, main.jsx, pages/ (11 routes), components/,
+│                                       #   context/, lib/api.js (VITE_API_URL → :3001)
 │
 ├── models/                             # Trained model artifacts
 │   ├── red_zone_xgboost.json           # Historical XGBoost model (1.9 MB)

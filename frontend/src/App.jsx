@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import Sidebar from "./components/layout/Sidebar.jsx";
 import TopBar from "./components/layout/TopBar.jsx";
@@ -15,6 +15,7 @@ import HelpPage from "./pages/HelpPage.jsx";
 import LogoutPage from "./pages/LogoutPage.jsx";
 import { SelectionProvider } from "./context/SelectionContext.jsx";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { prefetchCompactVillages } from "./lib/villagesStore.js";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,12 @@ const queryClient = new QueryClient({
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Tier 2: kick off the one-and-only compact villages fetch at startup so the
+  // map/table pages are instant once it lands — every page shares this cache.
+  useEffect(() => {
+    prefetchCompactVillages(queryClient);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

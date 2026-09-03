@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useSelection } from "../context/SelectionContext.jsx";
-import { apiFetch } from "../lib/api.js";
+import { useRegionCompactVillages } from "../lib/villagesStore.js";
 import GisMap from "../components/ui/GisMap.jsx";
 import MapFilterButton from "../components/ui/MapFilterButton.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
@@ -22,29 +21,10 @@ export default function MapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const mapRef = useRef(null);
 
-  // Build query params from SelectionContext
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedDistrict) params.set("district", selectedDistrict);
-    else if (selectedState) params.set("state", selectedState);
-    return params.toString();
-  }, [selectedState, selectedDistrict]);
-
-  const queryString = queryParams ? `?${queryParams}` : "";
-
-  // compact=1 — the map needs only id/name/district/coords/risk/pop/priority,
-  // so skip the heavy per-row payloads (top_factors, timestamps, census data).
-  const {
-    data: villages = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["villages", "map", "compact", queryString],
-    queryFn: () =>
-      apiFetch(`/api/villages?compact=1${queryString ? `&${queryString}` : ""}`),
-    staleTime: 30_000,
-  });
+  // Tier 2: one shared compact fetch per session; the global State/District
+  // selection is applied to the in-memory list here (no per-change DB query).
+  // All 43,996 villages stay available — this is just the region-filtered view.
+  const { villages, isLoading, error, refetch } = useRegionCompactVillages();
 
   // Derive district list from fetched data
   const districts = useMemo(() => {

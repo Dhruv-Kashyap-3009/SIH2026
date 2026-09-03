@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { apiFetch } from "../lib/api.js";
 import { useSelection } from "../context/SelectionContext.jsx";
+import { useRegionFullVillages } from "../lib/villagesStore.js";
 import { SkeletonLoader, SkeletonCards, SkeletonBars } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
 
@@ -172,13 +173,6 @@ function capacityTierColor(pct) {
 export default function AnalyticsPage() {
   const { selectedState, selectedDistrict } = useSelection();
 
-  const villageQueryParams = useMemo(() => {
-    const p = new URLSearchParams();
-    if (selectedDistrict) p.set("district", selectedDistrict);
-    else if (selectedState) p.set("state", selectedState);
-    return p.toString();
-  }, [selectedState, selectedDistrict]);
-
   const siteQueryParams = useMemo(() => {
     const p = new URLSearchParams();
     if (selectedDistrict) p.set("district", selectedDistrict);
@@ -186,14 +180,14 @@ export default function AnalyticsPage() {
     return p.toString();
   }, [selectedState, selectedDistrict]);
 
-  const villageQS = villageQueryParams ? `?${villageQueryParams}` : "";
   const siteQS = siteQueryParams ? `?${siteQueryParams}` : "";
 
-  const { data: villages = [], isLoading: villagesLoading, error: villagesError, refetch: refetchVillages } = useQuery({
-    queryKey: ["villages", "analytics", villageQS],
-    queryFn: () => apiFetch(`/api/villages${villageQS}`),
-    staleTime: 30_000,
-  });
+  // Tier 2: the FULL village list (carries top_factors for the factor charts)
+  // is fetched once per session — lazily, on first visit to /analytics — and
+  // the global State/District selection filters it in memory, so switching
+  // regions recomputes the charts instantly with no further DB round trips.
+  const { villages: filteredVillages, isLoading: villagesLoading, error: villagesError, refetch: refetchVillages } =
+    useRegionFullVillages();
 
   const { data: sites = [], isLoading: sitesLoading, error: sitesError, refetch: refetchSites } = useQuery({
     queryKey: ["sites", "analytics", siteQS],
@@ -201,7 +195,6 @@ export default function AnalyticsPage() {
     staleTime: 30_000,
   });
 
-  const filteredVillages = villages;
   const filteredSites = sites;
 
   const riskData = useMemo(() => aggregateRiskLevels(filteredVillages), [filteredVillages]);

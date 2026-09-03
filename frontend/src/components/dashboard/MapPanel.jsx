@@ -4,11 +4,10 @@
  * Embedded MapLibre map with risk-level toggles, district filter, zoom controls, and legend.
  */
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import MapFilterButton from "../ui/MapFilterButton.jsx";
 import Icon from "../ui/Icon.jsx";
 import GisMap from "../ui/GisMap.jsx";
-import { apiFetch } from "../../lib/api.js";
+import { useCompactVillages } from "../../lib/villagesStore.js";
 
 const FILTERS = [
   { key: "RED", label: "RED Risk", color: "bg-severity-red" },
@@ -22,11 +21,9 @@ export default function MapPanel() {
   );
   const [selectedDistrict, setSelectedDistrict] = useState(null);
 
-  // compact=1 returns only the map fields (~5 MB at 44k villages instead of ~40 MB).
-  const { data: villages = [] } = useQuery({
-    queryKey: ["villages", "compact"],
-    queryFn: () => apiFetch("/api/villages?compact=1"),
-  });
+  // Shared Tier-2 store — one compact fetch per app session (prefetched at
+  // startup), reused by every map/table consumer instead of per-page fetches.
+  const { data: villages = [] } = useCompactVillages();
 
   const districts = useMemo(() => {
     const set = new Set(villages.map((v) => v.district));

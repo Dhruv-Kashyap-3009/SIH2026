@@ -1,15 +1,14 @@
 /**
  * Villages table page.
- * Fetches from GET /api/villages with server-side filtering via query params.
- * Sorting remains client-side.
+ * Reads the shared Tier-2 village store and filters entirely client-side
+ * (region from SelectionContext + risk/priority chips + sorting).
  */
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import Icon from "../components/ui/Icon.jsx";
 import { SkeletonLoader } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
-import { apiFetch } from "../lib/api.js";
+import { useRegionCompactVillages } from "../lib/villagesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 
 // Risk level: RED/ORANGE/GREEN use severity-red/amber/green per Section 5.1
@@ -47,47 +46,24 @@ function SkeletonRow() {
   return (<tr className="border-b border-[#1E2330]">{Array.from({ length: 7 }).map((_, i) => <td key={i} className="px-4 py-3"><div className="h-4 bg-[#1A1E28] rounded-[2px] animate-pulse w-3/4" /></td>)}</tr>);
 }
 
-/**
- * Build query params for the API from the current filters.
- * API supports single-value ?risk_level= and ?relocation_priority=.
- * When multiple values are selected in a category, we pass the first one
- * to the API and rely on client-side refinement for the rest — this still
- * tests the backend's filtering for the primary value.
- */
-function buildQueryParams(filters, selectedState, selectedDistrict) {
-  const params = new URLSearchParams();
-  if (selectedDistrict) params.set("district", selectedDistrict);
-  else if (selectedState) params.set("state", selectedState);
-  if (filters.risk_level.length === 1) params.set("risk_level", filters.risk_level[0]);
-  if (filters.priority.length === 1) params.set("relocation_priority", filters.priority[0]);
-  return params.toString();
-}
-
 export default function HabitationsPage() {
   const navigate = useNavigate();
   const [sortConfig, setSortConfig] = useState({ key: "risk_score", direction: "desc" });
   const [filters, setFilters] = useState({ risk_level: [], priority: [] });
   const { selectedState, selectedDistrict } = useSelection();
 
-  // Build query string — passes single filters to API, multi-filters need client refinement
-  const queryString = useMemo(() => buildQueryParams(filters, selectedState, selectedDistrict), [filters, selectedState, selectedDistrict]);
+  // Tier 2: shared compact store (one fetch per session) + the global
+  // State/District selection applied in memory; risk/priority chips below
+  // filter the region view client-side too.
+  const { villages: regionVillages, isLoading, error, refetch } = useRegionCompactVillages();
 
-  // compact=1 — the table renders only the 11 fields below, so skip the heavy
-  // per-row payloads (top_factors, timestamps, census data) at 44k-row scale.
-  const { data: allVillages = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["villages", "compact", queryString],
-    queryFn: () =>
-      apiFetch(`/api/villages?compact=1${queryString ? `&${queryString}` : ""}`),
-  });
-
-  // Client-side refinement for multi-select filters (when API can't handle them in one call)
   const filtered = useMemo(() => {
-    return allVillages.filter((v) => {
-      if (filters.risk_level.length > 1 && !filters.risk_level.includes(v.risk_level)) return false;
-      if (filters.priority.length > 1 && !filters.priority.includes(v.relocation_priority)) return false;
+    return regionVillages.filter((v) => {
+      if (filters.risk_level.length > 0 && !filters.risk_level.includes(v.risk_level)) return false;
+      if (filters.priority.length > 0 && !filters.priority.includes(v.relocation_priority)) return false;
       return true;
     });
-  }, [allVillages, filters]);
+  }, [regionVillages, filters]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -125,7 +101,7 @@ export default function HabitationsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-phase-text tracking-tight">Vulnerable Villages</h1>
             <p className="text-sm text-phase-text-secondary mt-1">
-              {selectedDistrict || selectedState || "All regions"} &mdash; {sorted.length} of {allVillages.length} villages
+              {selectedDistrict || selectedState || "All regions"} &mdash; {sorted.length} of {regionVillages.length} villages
             </p>
           </div>
           {hasActiveFilters && (

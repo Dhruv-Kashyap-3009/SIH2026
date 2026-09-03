@@ -4,11 +4,10 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import Icon from "../ui/Icon.jsx";
 import { SkeletonLoader } from "../ui/SkeletonLoader.jsx";
 import ErrorState from "../ui/ErrorState.jsx";
-import { apiFetch } from "../../lib/api.js";
+import { useCompactVillages } from "../../lib/villagesStore.js";
 
 const SEVERITY_COLORS = {
   RED: "text-severity-red",
@@ -20,12 +19,9 @@ export default function CriticalHabitationsTable() {
   const [selectedVillage, setSelectedVillage] = useState(null);
   const navigate = useNavigate();
 
-  // Shares the compact dashboard fetch with MapPanel (same queryKey): the API
-  // orders by risk_score desc, so the first rows are the highest-risk villages.
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["villages", "compact"],
-    queryFn: () => apiFetch("/api/villages?compact=1"),
-  });
+  // Shared Tier-2 store with MapPanel / every village consumer. The API orders
+  // by risk_score desc, so the first rows are the highest-risk villages.
+  const { data, isLoading, error, refetch } = useCompactVillages();
 
   return (
     <div className="bg-surface-base border border-border-subtle rounded-[4px] flex flex-col h-full overflow-hidden">

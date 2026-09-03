@@ -1,30 +1,16 @@
 /**
  * Relocation Priority kanban page.
- * Fetches villages from GET /api/villages, groups into 4 lanes client-side.
+ * Groups the shared Tier-2 village store into 4 lanes client-side.
  */
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import KanbanBoard from "../components/dashboard/KanbanBoard.jsx";
 import { SkeletonLoader } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
-import { apiFetch } from "../lib/api.js";
-import { useSelection } from "../context/SelectionContext.jsx";
+import { useRegionCompactVillages } from "../lib/villagesStore.js";
 
 export default function PriorityPage() {
-  const { selectedState, selectedDistrict } = useSelection();
-
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedDistrict) params.set("district", selectedDistrict);
-    else if (selectedState) params.set("state", selectedState);
-    return params.toString();
-  }, [selectedState, selectedDistrict]);
-
-  const { data: villages = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["villages", "compact", queryParams],
-    queryFn: () =>
-      apiFetch(`/api/villages?compact=1${queryParams ? `&${queryParams}` : ""}`),
-  });
+  // Tier 2: shared compact store, region-filtered in memory by the global
+  // State/District selection — switching regions never hits the database.
+  const { villages, isLoading, error, refetch } = useRegionCompactVillages();
 
   return (
     <main className="flex-1 overflow-y-auto bg-phase-bg p-6">

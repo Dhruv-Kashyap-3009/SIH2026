@@ -2,6 +2,13 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Tier-2 frontend: one fetch, client-side filtering (Sep 2026)
+
+- **Before**: every page (map, villages table, kanban, analytics) re-queried `GET /api/villages?compact=1` with `?state=`/`&district=` filters on every navigation and every filter change — each a fresh remote-DB round trip over the 43,996-village list (~10-15 s cold).
+- **Now**: new `frontend/src/lib/villagesStore.js` holds the full compact village list in the React Query cache **once per app session** (`staleTime/gcTime: Infinity` — the exports are static between model runs), prefetched at startup in `App.jsx`. Pages filter that in-memory array by the global State/District selection in milliseconds — **zero per-navigation DB queries**. All 43,996 villages remain available; the map still renders the full dataset (43996 counter, region views included).
+- Consumers rewired: `MapPanel` + `CriticalHabitationsTable` (shared dashboard fetch), `MapPage`, `HabitationsPage` (risk/priority chips now fully client-side), `PriorityPage` (kanban), `AnalyticsPage` (lazy-loads the FULL records once on first visit — it charts `top_factors` — then region-filters in memory; sites fetch unchanged). Village detail pages keep their single `/api/villages/:id` fetch.
+- Verified live against the Singapore Neon DB: exactly **one** `villages?compact=1` request per page load; navigating map → villages → analytics added **zero** village fetches (only the small `/districts` call on state change); selecting Mizoram switched the map to 830 villages and the table to "Mizoram — 830 of 830 villages" instantly.
+
 ## [Unreleased] — Backend Tier-1 performance (gzip + response cache) (Sep 2026)
 
 - **Root cause of UI lag**: every page load re-queried the remote Neon DB (us-east-2) for all 43,996 rows — ~250 ms network round trip per request, plus a 40 MB/5–11 MB JSON transfer and browser-side render of tens of thousands of rows.

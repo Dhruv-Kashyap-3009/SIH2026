@@ -39,6 +39,7 @@ MODEL_DIR = 'models'
 # Feature group definitions (maps feature names to hazard types)
 LANDSLIDE_FEATURES = [
     'elevation_m', 'slope_degrees', 'terrain_roughness',
+    'slope_x_rainfall',  # landslide trigger interaction
     'dist_to_nearest_road_km', 'road_density_5km',
     'dist_to_nearest_hospital_km', 'dist_to_nearest_school_km',
 ]
@@ -49,6 +50,7 @@ FLOOD_FEATURES = [
     'rain_days_per_year',
     'is_lowland', 'near_major_river', 'dist_to_nearest_river_km',
     'landcover_class',
+    'twi_proxy',  # flood susceptibility interaction
 ]
 
 # Features that don't clearly belong to either hazard
@@ -63,12 +65,14 @@ def compute_hazard_decomposition(df, features):
     """
     print("Computing hazard decomposition via SHAP...")
 
-    # Load the main model
+    # Load the SUSCEPTIBILITY model (leakage-free) — NOT the historical model
     model = xgb.XGBClassifier()
-    model.load_model(os.path.join(MODEL_DIR, 'red_zone_xgboost.json'))
+    model.load_model(os.path.join(MODEL_DIR, 'susceptibility_xgboost.json'))
 
-    # Prepare feature matrix
-    available_features = [f for f in features if f in df.columns]
+    # Prepare feature matrix using susceptibility features
+    with open(os.path.join(MODEL_DIR, 'susceptibility_features.json')) as f:
+        sus_features = json.load(f)
+    available_features = [f for f in sus_features if f in df.columns]
     X = df[available_features].copy()
     X = X.fillna(X.median())
 
@@ -157,11 +161,9 @@ def main():
     df = df.dropna(subset=['latitude', 'longitude'])
     print(f"Loaded {len(df):,} villages")
 
-    # Load feature list
-    with open(os.path.join(MODEL_DIR, 'features.json')) as f:
+    # Load susceptibility feature list
+    with open(os.path.join(MODEL_DIR, 'susceptibility_features.json')) as f:
         features = json.load(f)
-        if isinstance(features, dict):
-            features = features['features']
 
     # Compute hazard decomposition
     landslide_risk, flood_risk = compute_hazard_decomposition(df, features)

@@ -1,4 +1,8 @@
 """
+# DIAGNOSTIC ONLY — these soft-risk columns are derived from leakage features
+# (dist_to_nearest_landslide_km, dist_to_nearest_flood_km) and must never
+# be added to the susceptibility model's feature list.
+
 Task 2: Distance-Decay Soft Labels
 
 Instead of hard binary labels (high_risk=1 for any village within 10km of

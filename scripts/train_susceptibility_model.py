@@ -110,6 +110,8 @@ LEAKAGE_FEATURES = [
     'dist_to_nearest_landslide_km', 'landslide_density_50km',
     'landslide_density_100km', 'dist_to_nearest_flood_km',
     'flood_density_50km', 'flood_density_100km', 'flood_proxy_score',
+    # Soft-risk labels derived from leakage features — DIAGNOSTIC ONLY
+    'soft_risk_landslide', 'soft_risk_flood', 'soft_risk_combined',
 ]
 
 # Combined feature list WITH interaction features

@@ -83,15 +83,15 @@ print("TEST 2: Known Safe/Flat Areas → Should Be GREEN")
 print("=" * 70)
 
 # The Brahmaputra valley in Assam is relatively flat and far from landslides
-# Dhubri, Goalpara, Kokrajhar are in the western Assam plains
+# NOTE: only districts that are BOTH flat AND not in the historical flood zone
+# belong here. Morigaon/Dhubri/Tinsukia/Barpeta were all >100% in the
+# historical flood zone (2020 Assam floods) — they are validated by TEST 3
+# (flood ground truth) instead, since flood risk legitimately makes them
+# non-GREEN in the blended multi-hazard score.
 safe_districts = {
-    'Dhubri': ('Assam', 'Flat Brahmaputra plains, minimal landslides'),
     'Goalpara': ('Assam', 'Western Assam plains'),
     'Kokrajhar': ('Assam', 'Bodo terraced hills but valley areas are safe'),
-    'Barpeta': ('Assam', 'Brahmaputra floodplain, no hills'),
     'Nalbari': ('Assam', 'Flat Brahmaputra valley'),
-    'Morigaon': ('Assam', 'Brahmaputra plains'),
-    'Tinsukia': ('Assam', 'Upper Assam plains'),
 }
 
 for district, (state, reason) in safe_districts.items():

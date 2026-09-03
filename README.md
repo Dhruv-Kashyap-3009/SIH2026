@@ -54,13 +54,15 @@ An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Ea
 | 📋 MEDIUM_TERM | 157 | Monitor and plan |
 | ✅ MONITOR | 14,152 | Low risk, routine monitoring |
 
-### Multi-Hazard Decomposition (Phase 5)
+### Multi-Hazard Decomposition (Phase 5 — Susceptibility Model)
+
+> **Note:** Decomposition now uses the **susceptibility model** (59 leakage-free features) instead of the historical model. This gives a more honest attribution to genuine physical drivers rather than distance-to-past-events. Result: more villages classified as MITIGATE (flood-dominated, fortification feasible) rather than RELOCATE.
 
 | Action | Villages | % | Rationale |
 |--------|----------|---|-----------|
-| 🏚️ RELOCATE | 13,199 | 30.0% | Landslide risk dominates — hard to mitigate |
-| 🛡️ MITIGATE | 18,833 | 42.8% | Flood risk dominates — fortification feasible |
-| 👁️ MONITOR | 11,964 | 27.2% | Low risk or mixed |
+| 🏚️ RELOCATE | 6,986 | 15.9% | Landslide risk dominates — hard to mitigate |
+| 🛡️ MITIGATE | 29,964 | 68.1% | Flood risk dominates — fortification feasible |
+| 👁️ MONITOR | 7,046 | 16.0% | Low risk or mixed |
 
 ### Risk by State
 
@@ -268,6 +270,20 @@ Instead of one blended risk_score, outputs separate hazard scores:
 
 ---
 
+## 🔧 Model Refinement Tasks
+
+| Script | Purpose | Key Output |
+|--------|---------|------------|
+| `extract_interaction_features.py` | Adds `slope_x_rainfall` (landslide trigger) and `twi_proxy` (flood susceptibility) interaction features | Updated feature matrix (+2 columns) |
+| `create_soft_labels.py` | Distance-decay soft risk labels: `exp(-distance / decay_km)` — landslide decay=5km, flood decay=7km | `soft_risk_landslide`, `soft_risk_flood`, `soft_risk_combined` columns |
+| `calibrate_model.py` | Reliability diagram + Platt scaling/isotonic calibration check. Model already well-calibrated (ECE=0.021), calibration NOT applied | `models/calibration_plot.png`, `calibration_metadata.json` |
+| `optimize_thresholds.py` | Cost-sensitive threshold optimization on **out-of-fold** predictions (FN cost=5× FP). Also quantile-based zoning alternative | `predicted_risk_zone_fixed`, `predicted_risk_zone_quantile` columns; `threshold_metadata.json` |
+| `uncertainty_quantification.py` | 7-model bootstrap ensemble → continuous prediction uncertainty [0,1]. 25% low-confidence villages | `prediction_uncertainty`, `prediction_std` columns; `uncertainty_metadata.json` |
+
+> **Note:** Interaction features (slope×rainfall, TWI proxy) tested but HURT LOSO AUC by -0.005 → dropped from the trained model. The features exist in the feature matrix but are not used by the current susceptibility model.
+
+---
+
 ## 📁 Datasets Used
 
 ### 1. Census 2011 Village Directory
@@ -424,6 +440,7 @@ python scripts/extract_raster_features.py
 python scripts/extract_vector_features.py
 python scripts/extract_flood_features.py
 python scripts/combine_features.py
+python scripts/extract_interaction_features.py  # slope×rainfall, TWI proxy
 
 # Phase 2: Create labels
 python scripts/create_labels.py
@@ -443,6 +460,12 @@ python scripts/hazard_decomposition.py
 python scripts/carrying_capacity.py
 python scripts/relocation_planner.py
 python scripts/social_vulnerability.py
+
+# Model refinement (run after susceptibility model is trained)
+python scripts/create_soft_labels.py       # Distance-decay soft labels
+python scripts/calibrate_model.py          # Calibration check
+python scripts/optimize_thresholds.py      # Cost-sensitive threshold optimization
+python scripts/uncertainty_quantification.py  # Bootstrap ensemble uncertainty
 
 # Generate predictions
 python scripts/predict.py
@@ -798,7 +821,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 | Date | Change | Impact |
 |------|--------|--------|
-| Phase 5 | Multi-hazard decomposition: landslide vs flood risk scores | RELOCATE=13,199 / MITIGATE=18,833 / MONITOR=11,964 |
+| Phase 5 | Multi-hazard decomposition: landslide vs flood risk scores | RELOCATE=6,986 / MITIGATE=29,964 / MONITOR=7,046 |
 | Phase 4 | Social vulnerability index + updated priority scoring | 23,493 HIGH sensitivity villages |
 | Phase 3 | Relocation planner: greedy + LP assignment | 11,318 RED→GREEN assignments |
 | Phase 2 | Carrying capacity assessment for GREEN zones | 14,109 candidate villages scored |

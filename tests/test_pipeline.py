@@ -886,6 +886,20 @@ def test_hazard_decomposition():
             assert_test(f"Gandhia No.2 tie-break: ls={ls:.4f} >= fl*1.2={fl*1.2:.5f} -> RELOCATE",
                          row['recommended_action'] == 'RELOCATE')
 
+    # FIX 1 regression: hazard_decomposition must use susceptibility model features
+    import json as _json
+    with open('models/susceptibility_features.json') as _f:
+        sus_features = _json.load(_f)
+    # Read hazard_decomposition.py source to verify it loads susceptibility model
+    with open('scripts/hazard_decomposition.py', encoding='utf-8') as _f:
+        hd_source = _f.read()
+    assert_test("hazard_decomposition.py loads susceptibility_xgboost.json",
+                 'susceptibility_xgboost.json' in hd_source)
+    assert_test("hazard_decomposition.py loads susceptibility_features.json",
+                 'susceptibility_features.json' in hd_source)
+    assert_test("hazard_decomposition.py does NOT load red_zone_xgboost.json",
+                 'red_zone_xgboost.json' not in hd_source)
+
 
 def main():
     """Run all tests."""

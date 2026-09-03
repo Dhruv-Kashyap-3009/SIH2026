@@ -99,7 +99,7 @@ def test_readme_consistency():
     # ── TEST 5: Hazard decomposition counts ──
     if 'recommended_action' in df.columns:
         hazard = df['recommended_action'].value_counts()
-        readme_hazard = {'RELOCATE': 13199, 'MITIGATE': 18833, 'MONITOR': 11964}
+        readme_hazard = {'RELOCATE': 6986, 'MITIGATE': 29964, 'MONITOR': 7046}
         hazard_errors = []
         for action, count in readme_hazard.items():
             actual = int(hazard.get(action, 0))

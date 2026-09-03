@@ -45,10 +45,10 @@ def compute_buildable_land(df):
     """
     total = df['Total Geographical Area (in Hectares)'].fillna(0)
 
-    forest = df['Forest Area (in Hectares)'].fillna(0)
-    waterfall = df['Waterfall Area (in Hectares)'].fillna(0)
-    non_agri = df['Area under Non-Agricultural Uses (in Hectares)'].fillna(0)
-    barren = df['Barren & Un-cultivable Land Area (in Hectares)'].fillna(0)
+    forest = df['Forest Area (in Hectares)'].fillna(0) if 'Forest Area (in Hectares)' in df.columns else 0
+    waterfall = df['Waterfall Area (in Hectares)'].fillna(0) if 'Waterfall Area (in Hectares)' in df.columns else 0
+    non_agri = df['Area under Non-Agricultural Uses (in Hectares)'].fillna(0) if 'Area under Non-Agricultural Uses (in Hectares)' in df.columns else 0
+    barren = df['Barren & Un-cultivable Land Area (in Hectares)'].fillna(0) if 'Barren & Un-cultivable Land Area (in Hectares)' in df.columns else 0
 
     # Water bodies from Census
     tanks = df['Tanks/Lakes Area (in Hectares)'].fillna(0) if 'Tanks/Lakes Area (in Hectares)' in df.columns else 0

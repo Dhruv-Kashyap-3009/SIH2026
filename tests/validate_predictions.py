@@ -68,8 +68,8 @@ print(f"\nLandslides by state:")
 for state, count in ls_by_state.head(8).items():
     state_df = df[df['State Name'] == state]
     if len(state_df) > 0:
-        red_pct = (state_df['model_risk_zone'] == 'RED').mean() * 100
-        print(f"  {state}: {count:,} landslides, RED zone: {red_pct:.1f}%")
+        state_red_pct = (state_df['model_risk_zone'] == 'RED').mean() * 100
+        print(f"  {state}: {count:,} landslides, RED zone: {state_red_pct:.1f}%")
 
 # ============================================================
 # 3. DOMAIN KNOWLEDGE VALIDATION
@@ -196,7 +196,7 @@ print()
 print("=" * 70)
 print("OVERALL VERDICT")
 print("=" * 70)
-print(f"  EM-DAT detection rate: {red_pct + orange_pct:.1f}%")
+print(f"  EM-DAT detection rate (RED+ORANGE in EM-DAT zones): {red_pct + orange_pct:.1f}%")
 print(f"  Domain knowledge checks: {'ALL PASS' if all_correct else 'SOME ISSUES'}")
 print(f"  Hill vs Plains: {'CORRECT' if hill_red > plains_red else 'ISSUE'}")
 print(f"  Villages near landslides flagged RED: {(close_to_ls['model_risk_zone']=='RED').mean()*100:.1f}%")

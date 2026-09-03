@@ -588,6 +588,64 @@ def test_state_totals_consistency():
                      int(s_red + s_orange + s_green) == int(s_total))
 
 
+def test_susceptibility_state_totals_consistency():
+    """Test 12c: Verify per-state SUSCEPTIBILITY RED counts sum to the
+    headline susceptibility RED count. susceptibility_risk_zone is the
+    canonical risk_level/risk_score source for all public exports (VYOMA
+    schema), so its per-state totals must be internally consistent."""
+    print("\n=== TEST 12c: Susceptibility State Totals Consistency ===")
+
+    df = pd.read_csv('data/processed/prediction_output.csv', low_memory=False)
+    total_villages = len(df)
+
+    if 'susceptibility_risk_zone' not in df.columns:
+        assert_test("susceptibility_risk_zone column present", False,
+                    "missing from prediction_output.csv")
+        return
+
+    # Headline susceptibility zone counts (computed fresh — no hardcoding)
+    headline = df['susceptibility_risk_zone'].value_counts()
+    headline_red = int(headline.get('RED', 0))
+    headline_orange = int(headline.get('ORANGE', 0))
+    headline_green = int(headline.get('GREEN', 0))
+    print(f"  Susceptibility headline: RED={headline_red:,} ORANGE={headline_orange:,} "
+          f"GREEN={headline_green:,}")
+
+    # Per-state susceptibility zone counts
+    state_total = df.groupby('State Name').size()
+    state_red = df[df['susceptibility_risk_zone'] == 'RED'].groupby('State Name').size()
+    state_orange = df[df['susceptibility_risk_zone'] == 'ORANGE'].groupby('State Name').size()
+    state_green = df[df['susceptibility_risk_zone'] == 'GREEN'].groupby('State Name').size()
+
+    sum_red = int(state_red.sum())
+    assert_test("Per-state susceptibility RED sum == headline RED count",
+                 sum_red == headline_red,
+                 f"per-state sum={sum_red}, headline={headline_red}")
+
+    sum_orange = int(state_orange.sum())
+    assert_test("Per-state susceptibility ORANGE sum == headline ORANGE count",
+                 sum_orange == headline_orange,
+                 f"per-state sum={sum_orange}, headline={headline_orange}")
+
+    sum_green = int(state_green.sum())
+    assert_test("Per-state susceptibility GREEN sum == headline GREEN count",
+                 sum_green == headline_green,
+                 f"per-state sum={sum_green}, headline={headline_green}")
+
+    sum_totals = int(state_total.sum())
+    assert_test("Per-state totals sum to total village count",
+                 sum_totals == total_villages,
+                 f"per-state sum={sum_totals}, total={total_villages}")
+
+    # Print distribution per state for transparency
+    for s in state_total.index:
+        r = int(state_red.get(s, 0))
+        o = int(state_orange.get(s, 0))
+        g = int(state_green.get(s, 0))
+        print(f"  {s}: RED={r:,} ORANGE={o:,} GREEN={g:,} "
+              f"(RED%={100*r/state_total[s]:.1f})")
+
+
 def test_carrying_capacity():
     """Test 13: Carrying Capacity Engine (Phase 2)."""
     print("\n=== TEST 13: Carrying Capacity ===")
@@ -923,6 +981,7 @@ def main():
         test_prediction_output_fields()
         test_bug_fixes()
         test_state_totals_consistency()
+        test_susceptibility_state_totals_consistency()
         test_relocation_timeline()
         test_carrying_capacity()
         test_relocation_matching()

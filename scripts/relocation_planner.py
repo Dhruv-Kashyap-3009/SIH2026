@@ -70,8 +70,15 @@ def greedy_assignment(sources, targets, radius_km=50, max_per_target=50):
         candidates = within_radius & has_capacity
 
         if not candidates.any():
+            source_pop_val = source.get('Total Population of Village', 0)
+            source_pop_val = 0 if pd.isna(source_pop_val) else int(source_pop_val)
             assignments.append({
+                # red_village_id is the row position within the sorted source list
+                # (kept for backward compatibility). red_habitation_id is the stable
+                # Census/SHRUG id — the canonical key for downstream joins.
                 'red_village_id': source.get('village_id', source.name),
+                'red_habitation_id': source.get('habitation_id', None),
+                'red_population': source_pop_val,
                 'red_village_name': source.get('Village Name', ''),
                 'red_state': source.get('state', ''),
                 'red_district': source.get('district', ''),
@@ -105,6 +112,9 @@ def greedy_assignment(sources, targets, radius_km=50, max_per_target=50):
 
         # Estimate how many people this source village needs
         source_pop = source.get('Total Population of Village', 500)
+        if pd.isna(source_pop):
+            source_pop = 0
+        source_pop = int(source_pop)
         absorbable = min(source_pop, assigned_remaining)
 
         # Update remaining capacity
@@ -121,7 +131,10 @@ def greedy_assignment(sources, targets, radius_km=50, max_per_target=50):
 
         assignments.append({
             'red_village_id': source.get('village_id', source.name),
+            'red_habitation_id': source.get('habitation_id', None),
+            'red_population': source_pop,
             'red_village_name': source.get('Village Name', ''),
+
             'red_state': source.get('state', ''),
             'red_district': source.get('district', ''),
             'red_latitude': source['latitude'],
@@ -304,6 +317,13 @@ def main():
     parser = argparse.ArgumentParser(description='Relocation Planner')
     parser.add_argument('--village', type=str, help='Inspect a specific village')
     parser.add_argument('--radius', type=int, default=50, help='Max relocation distance in km (default: 50)')
+    parser.add_argument('--capacity', type=str,
+                        default=os.path.join(OUTPUT_DIR, 'carrying_capacity.csv'),
+                        help='Candidate-site (carrying capacity) CSV to plan against. '
+                             'Recommended: the canonical-zone filtered pool written by '
+                             'generate_relocation_sites.py (relocation_capacity_pool.csv), '
+                             'so destinations are GREEN under the canonical '
+                             '(susceptibility) model.')
     parser.add_argument('--save', type=str, default=os.path.join(OUTPUT_DIR, 'relocation_plan.csv'),
                         help='Output CSV path')
     args = parser.parse_args()
@@ -313,7 +333,7 @@ def main():
     print("=" * 60)
 
     # Load data
-    capacity_path = os.path.join(OUTPUT_DIR, 'carrying_capacity.csv')
+    capacity_path = args.capacity
     pred_path = os.path.join(OUTPUT_DIR, 'prediction_output.csv')
 
     if not os.path.exists(capacity_path):

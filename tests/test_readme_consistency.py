@@ -1,4 +1,11 @@
-"""Behavioral test: Verify README numbers match actual pipeline output."""
+"""Behavioral test: Verify README numbers match actual pipeline output.
+
+Since the VYOMA export schema (and all public-facing risk fields) now use the
+leakage-free SUSCEPTIBILITY model as the canonical source, the headline zone
+distribution, per-state table, and per-state sums are all validated against
+`susceptibility_risk_zone`. The historical model's `predicted_risk_zone` is
+still produced (and drives relocation_timeline) but is no longer the headline.
+"""
 import pandas as pd
 import sys
 
@@ -8,16 +15,16 @@ def test_readme_consistency():
     total = len(df)
     errors = []
 
-    # ── TEST 1: Headline zone counts ──
-    pred = df['predicted_risk_zone'].value_counts()
+    # ── TEST 1: Headline zone counts (susceptibility model — canonical) ──
+    pred = df['susceptibility_risk_zone'].value_counts()
     red = int(pred.get('RED', 0))
     orange = int(pred.get('ORANGE', 0))
     green = int(pred.get('GREEN', 0))
 
-    # README claims
-    readme_red, readme_orange, readme_green = 29687, 258, 14051
+    # README claims (updated to susceptibility distribution)
+    readme_red, readme_orange, readme_green = 27881, 3548, 12567
 
-    print(f"Headline: RED={red} ORANGE={orange} GREEN={green} TOTAL={total}")
+    print(f"Susceptibility headline: RED={red} ORANGE={orange} GREEN={green} TOTAL={total}")
     if red != readme_red:
         errors.append(f"RED: actual={red} readme={readme_red}")
     if orange != readme_orange:
@@ -26,12 +33,12 @@ def test_readme_consistency():
         errors.append(f"GREEN: actual={green} readme={readme_green}")
     if red + orange + green != total:
         errors.append(f"RED+ORANGE+GREEN={red+orange+green} != TOTAL={total}")
-    print(f"  ✅ Headline counts match" if not errors else f"  ❌ MISMATCHES: {errors}")
+    print(f"  {'✅ Headline susceptibility counts match' if not errors else f'❌ MISMATCHES: {errors}'}")
 
-    # ── TEST 2: Per-state RED sums to headline ──
-    state_red = df[df['predicted_risk_zone'] == 'RED'].groupby('State Name').size()
-    state_orange = df[df['predicted_risk_zone'] == 'ORANGE'].groupby('State Name').size()
-    state_green = df[df['predicted_risk_zone'] == 'GREEN'].groupby('State Name').size()
+    # ── TEST 2: Per-state susceptibility RED sums to headline ──
+    state_red = df[df['susceptibility_risk_zone'] == 'RED'].groupby('State Name').size()
+    state_orange = df[df['susceptibility_risk_zone'] == 'ORANGE'].groupby('State Name').size()
+    state_green = df[df['susceptibility_risk_zone'] == 'GREEN'].groupby('State Name').size()
     state_total = df.groupby('State Name').size()
 
     state_errors = []
@@ -55,17 +62,17 @@ def test_readme_consistency():
         print(f"  ❌ STATE ERRORS: {state_errors}")
         errors.extend(state_errors)
     else:
-        print(f"  ✅ Per-state sums match headline")
+        print(f"  ✅ Per-state susceptibility sums match headline")
 
-    # ── TEST 3: README per-state numbers match ──
+    # ── TEST 3: README per-state numbers match (susceptibility model) ──
     readme_states = {
-        'Assam': (25854, 16314, 63.1),
-        'Meghalaya': (6839, 4970, 72.7),
-        'Arunachal Pradesh': (5589, 3397, 60.8),
-        'Manipur': (2581, 2420, 93.8),
-        'Nagaland': (1428, 1360, 95.2),
-        'Tripura': (875, 422, 48.2),
-        'Mizoram': (830, 804, 96.9),
+        'Assam': (25854, 14906, 57.7),
+        'Meghalaya': (6839, 4763, 69.6),
+        'Arunachal Pradesh': (5589, 3211, 57.5),
+        'Manipur': (2581, 2454, 95.1),
+        'Nagaland': (1428, 1370, 95.9),
+        'Tripura': (875, 367, 41.9),
+        'Mizoram': (830, 810, 97.6),
     }
     for s, (rt, rr, rpct) in readme_states.items():
         actual_t = int(state_total.get(s, 0))
@@ -77,9 +84,9 @@ def test_readme_consistency():
             errors.append(f"{s} RED: actual={actual_r} readme={rr}")
         if actual_pct != rpct:
             errors.append(f"{s} RED%: actual={actual_pct} readme={rpct}")
-    print(f"  ✅ Per-state numbers match README" if not [e for e in errors if "total" in e or "RED%" in e or "RED:" in e] else f"  ❌ Per-state mismatch")
+    print(f"  {'✅ Per-state numbers match README' if not [e for e in errors if 'total' in e or 'RED%' in e or 'RED:' in e] else '❌ Per-state mismatch'}")
 
-    # ── TEST 4: Relocation priority counts ──
+    # ── TEST 4: Relocation priority counts (relocation_timeline) ──
     if 'relocation_timeline' in df.columns:
         reloc = df['relocation_timeline'].value_counts()
         readme_reloc = {'IMMEDIATE': 24220, 'SHORT_TERM': 5467, 'MEDIUM_TERM': 157, 'MONITOR': 14152}
@@ -125,15 +132,17 @@ def test_readme_consistency():
     except Exception as e:
         print(f"  ⚠️  Could not read carrying_capacity.csv: {e}")
 
-    # ── TEST 7: Zone definition is documented ──
+    # ── TEST 7: Canonical zone definition is documented ──
     with open('README.md', encoding='utf-8') as f:
         readme_text = f.read()
-    has_zone_def = 'predicted_risk_zone' in readme_text and 'zone definition' in readme_text.lower()
+    has_zone_def = ('susceptibility_risk_zone' in readme_text
+                    and 'canonical' in readme_text.lower()
+                    and 'zone definition' in readme_text.lower())
     if not has_zone_def:
-        errors.append("Zone definition not documented in README")
-        print(f"  ❌ Zone definition not documented")
+        errors.append("Canonical (susceptibility) zone definition not documented in README")
+        print(f"  ❌ Canonical zone definition not documented")
     else:
-        print(f"  ✅ Zone definition documented in README")
+        print(f"  ✅ Canonical (susceptibility) zone definition documented in README")
 
     # ── SUMMARY ──
     print(f"\n{'='*60}")

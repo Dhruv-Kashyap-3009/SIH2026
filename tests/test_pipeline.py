@@ -959,6 +959,82 @@ def test_hazard_decomposition():
                  'red_zone_xgboost.json' not in hd_source)
 
 
+def test_threshold_model_consistency():
+    """Regression: optimize_thresholds.py must calibrate AND apply the
+    cost-optimal threshold on the SAME model's scores (susceptibility).
+
+    The out-of-fold predictions come from the susceptibility model; applying
+    that threshold to the historical model's risk_score (a different, inflated
+    distribution) would be meaningless. This guard locks the Q1 canonical-model
+    decision into the threshold script."""
+    print("\n=== TEST 17b: Threshold <-> Score-Model Consistency ===")
+
+    with open('scripts/optimize_thresholds.py', encoding='utf-8') as f:
+        src = f.read()
+    assert_test("optimize_thresholds.py applies threshold on susceptibility_score",
+                 "risk_scores = df_pred['susceptibility_score'].values" in src)
+    assert_test("optimize_thresholds.py does NOT apply threshold on historical risk_score",
+                 "df_pred['risk_score'].values" not in src)
+
+    import json as _json
+    if os.path.exists('models/threshold_metadata.json'):
+        with open('models/threshold_metadata.json') as f:
+            meta = _json.load(f)
+        assert_test("threshold_metadata.score_column == susceptibility_score",
+                     meta.get('score_column') == 'susceptibility_score',
+                     f"got {meta.get('score_column')}")
+        assert_test("threshold_metadata documents Q1 canonical-model note",
+                     'Q1' in meta.get('note', '') and 'susceptibility_score' in meta.get('note', ''))
+        assert_test("cost_optimal_threshold in (0,1)",
+                     0 < meta.get('cost_optimal_threshold', 0) < 1)
+    else:
+        assert_test("threshold_metadata.json exists", False, 'file missing')
+
+
+def test_hazard_independence():
+    """Regression (Q5): landslide_risk_score and flood_risk_score must stay
+    genuinely independent. If a future edit makes them move together with the
+    overall risk (correlation creeping toward +1), the decomposition is broken.
+    Answer backed by numbers, saved to models/hazard_decomposition_validation.json."""
+    print("\n=== TEST 17c: Hazard Decomposition Independence (Q5) ===")
+
+    pred_path = 'data/processed/prediction_output.csv'
+    assert_test("prediction_output.csv exists", os.path.exists(pred_path))
+    if not os.path.exists(pred_path):
+        return
+    df = pd.read_csv(pred_path, low_memory=False)
+
+    import json as _json
+    ls = pd.to_numeric(df['landslide_risk_score'], errors='coerce')
+    fl = pd.to_numeric(df['flood_risk_score'], errors='coerce')
+    valid = ls.notna() & fl.notna()
+    r = ls[valid].corr(fl[valid])
+    assert_test(f"landslide vs flood correlation = {r:.4f} < 0.9 (independent signal)",
+                 r < 0.9, f"corr={r:.4f}")
+
+    # Within-bin spread: near-identical overall risk must still show spread in
+    # the (landslide - flood) split — evidence the two carry separate signal.
+    sus = pd.to_numeric(df['susceptibility_score'], errors='coerce')
+    diff = (ls - fl)[valid]
+    hi = (sus >= 0.9) & (sus < 1.0001) & valid
+    if hi.sum() > 100:
+        std_diff = float(diff[hi].std())
+        assert_test(f"std(landslide-flood) in 0.9-1.0 score bin = {std_diff:.4f} > 0.05",
+                     std_diff > 0.05, f"std={std_diff:.4f}")
+
+    # Validation artifact is present and internally consistent
+    vpath = 'models/hazard_decomposition_validation.json'
+    assert_test("hazard_decomposition_validation.json exists", os.path.exists(vpath))
+    if os.path.exists(vpath):
+        with open(vpath) as f:
+            val = _json.load(f)
+        assert_test("validation artifact correlation matches data",
+                     abs(val.get('pearson_correlation_landslide_flood', 0) - r) < 0.002,
+                     f"artifact={val.get('pearson_correlation_landslide_flood')} data={r:.4f}")
+        assert_test("validation artifact has example villages",
+                     len(val.get('example_villages', [])) >= 3)
+
+
 def main():
     """Run all tests."""
     global PASS, FAIL, ERRORS
@@ -988,6 +1064,8 @@ def main():
         test_relocation_planner()
         test_social_vulnerability()
         test_hazard_decomposition()
+        test_threshold_model_consistency()
+        test_hazard_independence()
     except Exception as e:
         print(f"\n💥 FATAL ERROR: {e}")
         traceback.print_exc()

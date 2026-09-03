@@ -167,9 +167,14 @@ def main():
     print(f"  Cost-optimal threshold: {best_t:.2f} (cost={best_cost:,.0f})")
     print(f"  Safety-first threshold (≥95% recall): {safe_t:.2f}")
 
-    # Apply to full dataset using in-sample risk_score for zone assignment
-    # (thresholds are validated on OOF, applied to in-sample for final output)
-    risk_scores = df_pred['risk_score'].values
+    # Apply to full dataset using the SUSCEPTIBILITY model's scores for zone
+    # assignment. The OOF predictions above were generated from the
+    # susceptibility model (via train_susceptibility_model.load_data()), so the
+    # calibrated threshold must be applied to susceptibility_score — NOT the
+    # historical model's risk_score (different, inflated score distribution).
+    # This mirrors the Q1 decision: susceptibility is canonical for all
+    # public-facing output.
+    risk_scores = df_pred['susceptibility_score'].values
     orange_threshold = best_t * 0.55
     df_pred['predicted_risk_zone_fixed'] = pd.Series(risk_scores).apply(
         lambda s: 'RED' if s >= best_t else ('ORANGE' if s >= orange_threshold else 'GREEN')
@@ -206,7 +211,11 @@ def main():
         'cost_optimal_oof': int(cost_optimal),
         'cost_reduction_pct_oof': cost_reduction,
         'method': 'out_of_fold_5fold_stratified',
-        'validation': 'thresholds optimized on out-of-fold cross-validated predictions, not in-sample scores',
+        'validation': ('thresholds optimized on out-of-fold cross-validated '
+                       'predictions, not in-sample scores'),
+        'score_column': 'susceptibility_score',
+        'note': ('threshold calibrated AND applied on susceptibility_score for '
+                 'consistency with the canonical model (see Q1 decision)'),
     }
     meta_path = os.path.join(MODEL_DIR, 'threshold_metadata.json')
     with open(meta_path, 'w') as f:

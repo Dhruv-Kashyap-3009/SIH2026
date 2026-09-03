@@ -828,8 +828,10 @@ Every village record includes `top_factors` — a JSON array of 3–5 features w
 
 - **Cost-optimal threshold**: 0.28 (vs the fixed 0.7), optimized on **out-of-fold cross-validated predictions** (never in-sample scores). With FN cost weight=5×, the model should flag more villages as RED to avoid missing actual hazards.
 - **Cost reduction**: 65.0% reduction in asymmetric cost on out-of-fold predictions (false negatives penalized 5× more than false positives). The earlier reported 90.4% was an in-sample figure and is superseded by this honest out-of-fold estimate.
-- **Quantile-based zoning**: Alternative — top 67% by score = RED, next 1% = ORANGE, rest = GREEN.
+- **Model-consistency (canonical)**: the OOF predictions come from the susceptibility model, so the threshold is applied to **`susceptibility_score`** — NOT the historical model's `risk_score` (different, inflated distribution). This matches the Q1 decision that susceptibility is canonical for all public output. Resulting `predicted_risk_zone_fixed` (RED ≥ 0.28 / ORANGE ≥ 0.154): RED 32,937 / ORANGE 2,511 / GREEN 8,548.
+- **Quantile-based zoning**: Alternative — top 67% by score = RED, next 1% = ORANGE, rest = GREEN (on susceptibility scores): RED 29,477 / ORANGE 439 / GREEN 14,080.
 - **Both methods** output as separate columns for team comparison before final demo.
+- **Hazard-decomposition independence (Q5)**: `landslide_risk_score` vs `flood_risk_score` Pearson correlation = **−0.145**; std of (landslide − flood) inside 0.9–1.0 overall-score bin = **0.139** (real spread). Full numbers + example villages in `models/hazard_decomposition_validation.json`.
 
 ### Task 4: Calibration
 

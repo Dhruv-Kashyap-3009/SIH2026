@@ -2,6 +2,23 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Final Review Fixes (threshold model-consistency + Q5 verification)
+
+### Fix A: threshold calibrated AND applied on the susceptibility model
+- `optimize_thresholds.py` applied the cost-optimal threshold (tuned on out-of-fold **susceptibility** predictions) to the **historical** model's `risk_score`. Score distributions differ (historical scores are inflated by leakage), so the zones were computed on a different model than the threshold was calibrated for — contradicting the Q1 canonical-model decision.
+- **Fix**: `risk_scores = df_pred['susceptibility_score'].values` — threshold and score source now reference the same (canonical) model. `score_column` + Q1 note added to `models/threshold_metadata.json`.
+- **Results after re-run** (cost curve unchanged — it was already out-of-fold): cost-optimal threshold **0.28**, cost reduction **65.0%** on OOF predictions (fixed 0.7 threshold baseline). Zone columns now reflect the susceptibility distribution:
+  - `predicted_risk_zone_fixed` (RED ≥ 0.28, ORANGE ≥ 0.154): RED 32,937 / ORANGE 2,511 / GREEN 8,548
+  - `predicted_risk_zone_quantile` (67% / 1% / 32% by score rank): RED 29,477 / ORANGE 439 / GREEN 14,080
+- The older in-sample figures (0.38 threshold, 90.4% reduction) are superseded and corrected below.
+- Regression guards added: `test_threshold_model_consistency` (script applies threshold on `susceptibility_score`, never `risk_score`; metadata documents the canonical source).
+
+### Fix B: Q5 (landslide/flood independence) now verified with actual numbers
+- Computed on `prediction_output.csv` (decomposition already runs on the susceptibility model): **Pearson correlation(landslide_risk_score, flood_risk_score) = −0.145** across 43,996 villages — mildly negative, not collinear.
+- Not proportional to overall risk: within narrow `susceptibility_score` bins the std of (landslide − flood) is **0.105 (0.7–0.8), 0.107 (0.8–0.9), 0.139 (0.9–1.0)** — near-zero if the two moved with overall risk.
+- Example villages at near-identical high overall risk: **Pempaleng (Tawang, AP)** sus 0.987 → landslide 0.471 / flood 0.062, vs **Hahim (Kamrup, Assam)** sus 0.966 → landslide 0.043 / flood 0.539.
+- Saved to `models/hazard_decomposition_validation.json`; regression guard `test_hazard_independence` asserts correlation < 0.9.
+
 ## [Unreleased] — VYOMA Frontend Ingestion Export (Sep 2026)
 
 ### Canonical model switch: historical → susceptibility for ALL public output
@@ -39,7 +56,8 @@ All notable changes to the NE India Hazard Red Zone Platform.
 - **Output**: models/hyperparam_search_spatial.csv, models/spatial_cv_scores.json (with loso_per_state)
 
 ### Task 5: Threshold Optimization
-- **Cost-optimal threshold**: 0.38 (vs current 0.7). With FN cost weight=5x, lowering threshold dramatically reduces missed-risk cost (90.4% reduction).
+- **Cost-optimal threshold (CORRECTED)**: 0.28 on out-of-fold predictions (the original 0.38 figure was in-sample and is superseded). With FN cost weight=5x, lowering threshold reduces missed-risk cost.
+- **Cost reduction (CORRECTED)**: 65.0% on out-of-fold predictions (the original 90.4% was in-sample). Threshold is now also *applied* to `susceptibility_score` (canonical model) — see Fix A above.
 - **Quantile-based zoning**: Also implemented — top 67% by score = RED.
 - **New columns in prediction_output.csv**: predicted_risk_zone_fixed, predicted_risk_zone_quantile
 - **Output**: models/threshold_cost_curve.csv, models/threshold_metadata.json

@@ -2,14 +2,13 @@
  * Dashboard page matching the exact Stitch design.
  * Composes all dashboard sections: header, stats, map+table, bottom row.
  */
-import { useQuery } from "@tanstack/react-query";
 import Icon from "../components/ui/Icon.jsx";
 import StatsRow from "../components/dashboard/StatsRow.jsx";
 import MapPanel from "../components/dashboard/MapPanel.jsx";
 import CriticalHabitationsTable from "../components/dashboard/CriticalHabitationsTable.jsx";
 import RelocationPrioritySummary from "../components/dashboard/RelocationPrioritySummary.jsx";
 import RelocationSiteCapacity from "../components/dashboard/RelocationSiteCapacity.jsx";
-import { apiFetch } from "../lib/api.js";
+import { useCompactVillages } from "../lib/villagesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 
 function formatTimestamp(iso) {
@@ -29,14 +28,10 @@ export default function Dashboard() {
   const { selectedState, selectedDistrict } = useSelection();
   const regionLabel = selectedDistrict || selectedState || "Selected State / Selected District";
 
-  // Shares queryKey ["dashboard"] with StatsRow / RelocationPrioritySummary, so
-  // the aggregate stats are fetched once and reused. predicted_at / model_version
-  // come from the API so "last updated" is real, never hardcoded.
-  const { data: meta } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => apiFetch("/api/dashboard"),
-    staleTime: 30_000,
-  });
+  // Tier 3: predicted_at / model_version come from the static bundle's meta
+  // (embedded by scripts/generate_frontend_static.py) — the header is backed by
+  // real run metadata without any database call.
+  const { meta } = useCompactVillages();
 
   const predictedLabel = formatTimestamp(meta?.predicted_at);
 

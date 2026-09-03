@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
   Bar,
@@ -11,9 +10,9 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { apiFetch } from "../lib/api.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 import { useRegionFullVillages } from "../lib/villagesStore.js";
+import { useRegionSites } from "../lib/sitesStore.js";
 import { SkeletonLoader, SkeletonCards, SkeletonBars } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
 
@@ -173,15 +172,6 @@ function capacityTierColor(pct) {
 export default function AnalyticsPage() {
   const { selectedState, selectedDistrict } = useSelection();
 
-  const siteQueryParams = useMemo(() => {
-    const p = new URLSearchParams();
-    if (selectedDistrict) p.set("district", selectedDistrict);
-    else if (selectedState) p.set("state", selectedState);
-    return p.toString();
-  }, [selectedState, selectedDistrict]);
-
-  const siteQS = siteQueryParams ? `?${siteQueryParams}` : "";
-
   // Tier 2: the FULL village list (carries top_factors for the factor charts)
   // is fetched once per session — lazily, on first visit to /analytics — and
   // the global State/District selection filters it in memory, so switching
@@ -189,13 +179,9 @@ export default function AnalyticsPage() {
   const { villages: filteredVillages, isLoading: villagesLoading, error: villagesError, refetch: refetchVillages } =
     useRegionFullVillages();
 
-  const { data: sites = [], isLoading: sitesLoading, error: sitesError, refetch: refetchSites } = useQuery({
-    queryKey: ["sites", "analytics", siteQS],
-    queryFn: () => apiFetch(`/api/sites${siteQS}`),
-    staleTime: 30_000,
-  });
-
-  const filteredSites = sites;
+  // Tier 3: sites come from the static bundle, region-filtered in memory.
+  const { sites: filteredSites = [], isLoading: sitesLoading, error: sitesError, refetch: refetchSites } =
+    useRegionSites();
 
   const riskData = useMemo(() => aggregateRiskLevels(filteredVillages), [filteredVillages]);
   const priorityData = useMemo(() => aggregatePriorities(filteredVillages), [filteredVillages]);

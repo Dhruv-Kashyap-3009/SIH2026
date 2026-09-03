@@ -1,13 +1,12 @@
 /**
  * Carrying Capacity page.
- * Fetches sites from GET /api/sites instead of local mock data.
+ * Reads the shared static sites store (Tier 3) and filters client-side.
  */
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import Icon from "../components/ui/Icon.jsx";
 import { SkeletonBars } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
-import { apiFetch } from "../lib/api.js";
+import { useRegionSites } from "../lib/sitesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 
 /**
@@ -59,17 +58,8 @@ function SkeletonStats() {
 export default function CapacityPage() {
   const { selectedState, selectedDistrict } = useSelection();
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedDistrict) params.set("district", selectedDistrict);
-    else if (selectedState) params.set("state", selectedState);
-    return params.toString();
-  }, [selectedState, selectedDistrict]);
-
-  const { data: filteredSites = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["sites", queryParams],
-    queryFn: () => apiFetch(`/api/sites${queryParams ? `?${queryParams}` : ""}`),
-  });
+  // Tier 3: one static sites bundle per session, region-filtered in memory.
+  const { sites: filteredSites = [], isLoading, error, refetch } = useRegionSites();
 
   const sorted = useMemo(() => [...filteredSites].sort((a, b) => (b.occupied / b.total_capacity) - (a.occupied / a.total_capacity)), [filteredSites]);
   const stats = useMemo(() => filteredSites.length > 0 ? summaryStats(filteredSites) : null, [filteredSites]);

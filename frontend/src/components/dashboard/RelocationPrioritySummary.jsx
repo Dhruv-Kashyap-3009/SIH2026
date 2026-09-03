@@ -1,15 +1,22 @@
 /**
  * Relocation Priority Summary card.
- * Fetches from GET /api/dashboard for priority tier counts.
+ *
+ * Tier 3: tier counts are aggregated in the browser from the static compact
+ * village bundle (same source rows the old /api/dashboard call used).
  */
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "../../lib/api.js";
+import { useMemo } from "react";
+import { useCompactVillages } from "../../lib/villagesStore.js";
 
 export default function RelocationPrioritySummary() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => apiFetch("/api/dashboard"),
-  });
+  const { villages, isLoading, error } = useCompactVillages();
+
+  const counts = useMemo(() => {
+    const c = { IMMEDIATE: 0, "SHORT-TERM": 0, "MEDIUM-TERM": 0, ROUTINE: 0 };
+    for (const v of villages) {
+      if (c[v.relocation_priority] !== undefined) c[v.relocation_priority]++;
+    }
+    return c;
+  }, [villages]);
 
   if (isLoading) {
     return (
@@ -35,11 +42,10 @@ export default function RelocationPrioritySummary() {
     );
   }
 
-  const p = data.relocation_priority || {};
   const PRIORITIES = [
-    { label: "Immediate", value: String(p.IMMEDIATE ?? 0), color: "text-severity-red" },
-    { label: "Short-term", value: String(p["SHORT-TERM"] ?? 0), color: "text-severity-orange" },
-    { label: "Med-term", value: String(p["MEDIUM-TERM"] ?? 0), color: "text-severity-amber" },
+    { label: "Immediate", value: String(counts.IMMEDIATE), color: "text-severity-red" },
+    { label: "Short-term", value: String(counts["SHORT-TERM"]), color: "text-severity-orange" },
+    { label: "Med-term", value: String(counts["MEDIUM-TERM"]), color: "text-severity-amber" },
   ];
 
   return (

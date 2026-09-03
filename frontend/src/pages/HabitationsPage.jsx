@@ -29,6 +29,10 @@ const PRIORITY_COLORS = {
 const RISK_LEVELS = ["RED", "ORANGE", "GREEN"];
 const PRIORITIES = ["IMMEDIATE", "SHORT-TERM", "MEDIUM-TERM", "ROUTINE"];
 
+// Defensive fallback so an unexpected value (e.g. an untranslated vocabulary
+// from a stale export) degrades to neutral styling instead of crashing.
+const NEUTRAL = { bg: "bg-phase-card", text: "text-phase-text-secondary" };
+
 function SortIcon({ column, sortConfig }) {
   if (sortConfig.key !== column) return <Icon name="unfold_more" className="text-[14px] opacity-40" />;
   return <Icon name={sortConfig.direction === "asc" ? "arrow_upward" : "arrow_downward"} className="text-[14px]" />;
@@ -138,9 +142,9 @@ export default function HabitationsPage() {
                     <td className="px-4 py-3 text-phase-text-secondary font-mono text-[13px]">{idx + 1}</td>
                     <td className="px-4 py-3"><span className="text-phase-text text-[14px]">{v.name}</span><span className="text-phase-text-secondary text-[12px] ml-2 font-mono">{v.village_id}</span></td>
                     <td className="px-4 py-3 text-phase-text font-mono text-[13px]">{v.population.toLocaleString()}</td>
-                    <td className="px-4 py-3"><span className={`font-mono text-[14px] font-semibold ${RISK_LEVEL_COLORS[v.risk_level].text}`}>{v.risk_score}</span></td>
-                    <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-[2px] text-[11px] font-mono text-white ${RISK_LEVEL_COLORS[v.risk_level].bg}`}>{v.risk_level}</span></td>
-                    <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-[2px] text-[11px] font-mono text-white ${PRIORITY_COLORS[v.relocation_priority].bg}`}>{v.relocation_priority}</span></td>
+                    <td className="px-4 py-3"><span className={`font-mono text-[14px] font-semibold ${(RISK_LEVEL_COLORS[v.risk_level] || NEUTRAL).text}`}>{v.risk_score}</span></td>
+                    <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-[2px] text-[11px] font-mono text-white ${(RISK_LEVEL_COLORS[v.risk_level] || NEUTRAL).bg}`}>{v.risk_level}</span></td>
+                    <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-[2px] text-[11px] font-mono text-white ${(PRIORITY_COLORS[v.relocation_priority] || NEUTRAL).bg}`}>{v.relocation_priority}</span></td>
                     <td className="px-4 py-3">
                       {v.low_confidence ? (
                         <Icon name="warning_amber" className="text-[16px] text-severity-amber" />

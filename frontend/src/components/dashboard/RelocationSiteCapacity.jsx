@@ -3,11 +3,10 @@
  * Fetches sites from GET /api/sites and displays capacity bars.
  * Capacity thresholds: <70% = green, 70-90% = amber, >=90% = red
  */
-import { useQuery } from "@tanstack/react-query";
 import ProgressBar from "../ui/ProgressBar.jsx";
 import { SkeletonBars } from "../ui/SkeletonLoader.jsx";
 import ErrorState from "../ui/ErrorState.jsx";
-import { apiFetch } from "../../lib/api.js";
+import { useAllSites } from "../../lib/sitesStore.js";
 
 function capacityColor(pct) {
   if (pct >= 90) return "bg-severity-red";
@@ -20,10 +19,8 @@ function capacityColor(pct) {
 const MAX_SITES_SHOWN = 30;
 
 export default function RelocationSiteCapacity() {
-  const { data: sites = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["sites", "capacity-card"],
-    queryFn: () => apiFetch("/api/sites"),
-  });
+  // Tier 3: sites come from the static bundle — no database call.
+  const { sites = [], isLoading, error, refetch } = useAllSites();
 
   const shownSites = sites
     .slice()

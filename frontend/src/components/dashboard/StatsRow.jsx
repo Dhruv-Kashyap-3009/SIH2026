@@ -1,12 +1,16 @@
 /**
  * Metrics row for the dashboard.
- * Fetches from GET /api/dashboard for live aggregate stats.
+ *
+ * Tier 3: the numbers are aggregated in the browser from the static village +
+ * site bundles (identical source rows to the old GET /api/dashboard call), so
+ * the first page load never touches the database.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import StatCard from "../ui/StatCard.jsx";
 import { SkeletonCards } from "../ui/SkeletonLoader.jsx";
 import ErrorState from "../ui/ErrorState.jsx";
-import { apiFetch } from "../../lib/api.js";
+import { useCompactVillages } from "../../lib/villagesStore.js";
+import { useAllSites } from "../../lib/sitesStore.js";
 
 function formatNumber(n) {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
@@ -14,47 +18,72 @@ function formatNumber(n) {
 }
 
 export default function StatsRow() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => apiFetch("/api/dashboard"),
-  });
+  const {
+    villages,
+    isLoading: villagesLoading,
+    error: villagesError,
+    refetch: refetchVillages,
+  } = useCompactVillages();
+  const {
+    sites,
+    isLoading: sitesLoading,
+    error: sitesError,
+    refetch: refetchSites,
+  } = useAllSites();
+
+  const isLoading = villagesLoading || sitesLoading;
+  const error = villagesError || sitesError;
+
+  const stats = useMemo(() => {
+    const riskLevel = { RED: 0, ORANGE: 0, GREEN: 0 };
+    let immediate = 0;
+    let lowConfidence = 0;
+    let populationAtRisk = 0;
+    for (const v of villages) {
+      if (riskLevel[v.risk_level] !== undefined) riskLevel[v.risk_level]++;
+      if (v.relocation_priority === "IMMEDIATE") immediate++;
+      if (v.low_confidence) lowConfidence++;
+      if (v.risk_level === "RED" || v.risk_level === "ORANGE") {
+        populationAtRisk += v.population;
+      }
+    }
+    const totalCapacity = sites.reduce((sum, s) => sum + s.total_capacity, 0);
+    const available = sites.reduce((sum, s) => sum + s.available, 0);
+    return { riskLevel, immediate, lowConfidence, populationAtRisk, sitesTotal: sites.length, totalCapacity, available };
+  }, [villages, sites]);
 
   if (isLoading) return <SkeletonCards count={5} />;
-  if (error) return <ErrorState onRetry={() => refetch()} />;
+  if (error) return <ErrorState onRetry={() => { refetchVillages(); refetchSites(); }} />;
 
-  const immediateCount = data.relocation_priority?.IMMEDIATE ?? 0;
-  const lowConfidence = data.low_confidence_count ?? 0;
-  const availableSites = data.sites?.available ?? 0;
-
-  // Details are real aggregates from GET /api/dashboard — no placeholder copy.
+  // Same numbers and formatting as the previous /api/dashboard-backed row.
   const STATS = [
     {
       label: "RED Risk Villages",
-      value: String(data.risk_level?.RED ?? 0),
-      detail: `${immediateCount} immediate`,
+      value: String(stats.riskLevel.RED),
+      detail: `${stats.immediate} immediate`,
       valueColor: "text-severity-red",
     },
     {
       label: "ORANGE Risk",
-      value: String(data.risk_level?.ORANGE ?? 0),
-      detail: `${lowConfidence} low-confidence`,
+      value: String(stats.riskLevel.ORANGE),
+      detail: `${stats.lowConfidence} low-confidence`,
       valueColor: "text-severity-amber",
     },
     {
       label: "GREEN Risk",
-      value: String(data.risk_level?.GREEN ?? 0),
+      value: String(stats.riskLevel.GREEN),
       detail: "safe for habitation",
       valueColor: "text-severity-green",
     },
     {
       label: "Suitable Sites",
-      value: String(data.sites?.total ?? 0),
-      detail: `${formatNumber(availableSites)} places available`,
+      value: String(stats.sitesTotal),
+      detail: `${stats.available.toLocaleString()} places available`,
       valueColor: "text-severity-green",
     },
     {
       label: "Population at Risk",
-      value: formatNumber(data.population_at_risk ?? 0),
+      value: formatNumber(stats.populationAtRisk),
       detail: "RED + ORANGE pax",
       valueColor: "text-primary",
     },

@@ -1,52 +1,77 @@
 /**
- * Village data store — Tier-2 client-side filtering.
+ * Village data store — Tier 2 (one fetch per session) + Tier 3 (static files).
  *
- * Before: every page re-queried the API with ?state= / &district= filters, so
- * each navigation and each filter change paid a fresh ~10-15s DB round trip
- * for the 43,996-village list (the remote-DB latency + serialization cost).
+ * The villages dataset is static between model runs, so it is pre-built into a
+ * versioned JSON bundle by scripts/generate_frontend_static.py and served as a
+ * plain static file with `Cache-Control: immutable`. The browser downloads each
+ * model version once and the database is never queried — not even on the first
+ * page load. Pages filter the in-memory list by the global State/District
+ * selection in a few milliseconds; the map still receives ALL 43,996 villages
+ * (or the region-filtered view) exactly as before.
  *
- * Now: the full COMPACT village list is fetched ONCE per app session
- * (prefetched at startup by App.jsx) and kept in the React Query cache for the
- * lifetime of the tab — the data is static between model runs, so it never
- * goes stale. Pages filter that in-memory array by the global State/District
- * selection in a few milliseconds. The map still receives ALL villages (or the
- * region-filtered subset) exactly as before — nothing is hidden or dropped.
+ * Bundle shape: { meta: { version, predicted_at, village_count }, villages: [...] }
  *
  * Analytics additionally needs the FULL per-village records (top_factors,
- * model_version, prediction_timestamp), so it lazily loads the full list once
- * (only when the page is first opened) and filters the same way.
+ * model_version, prediction_timestamp), so it lazily loads those from the API
+ * once (only when the page is first opened) and filters the same way.
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSelection } from "../context/SelectionContext.jsx";
 import { apiFetch } from "./api.js";
 
+/**
+ * Identity of the current static bundles (model version + generator build tag,
+ * e.g. "v1.1-susceptibility-2"). Must match the filenames emitted by
+ * scripts/generate_frontend_static.py (BUILD_TAG there). Bump whenever the
+ * exports are regenerated — the URL changes, so browsers with an
+ * immutable-cached copy of an older bundle fetch the new one automatically.
+ */
+export const STATIC_VERSION = "v1.1-susceptibility-2";
+
 /** Shared query keys — any consumer using these dedupes to one network fetch. */
 export const COMPACT_KEY = ["villages", "all", "compact"];
 export const FULL_KEY = ["villages", "all", "full"];
 
-const fetchCompactVillages = () => apiFetch("/api/villages?compact=1");
+const COMPACT_PATH = `/static/vyoma_compact_${STATIC_VERSION}.json`;
+
+const fetchCompactBundle = () => apiFetch(COMPACT_PATH);
 const fetchFullVillages = () => apiFetch("/api/villages");
 
 /** Warm the compact cache at app startup (see App.jsx). */
 export function prefetchCompactVillages(queryClient) {
   return queryClient.prefetchQuery({
     queryKey: COMPACT_KEY,
-    queryFn: fetchCompactVillages,
+    queryFn: fetchCompactBundle,
   });
 }
 
-/** All 43,996 villages, compact projection (11 map/table fields). */
-export function useCompactVillages() {
+/** The full static bundle { meta, villages } — 43,996 compact rows. */
+export function useCompactBundle() {
   return useQuery({
     queryKey: COMPACT_KEY,
-    queryFn: fetchCompactVillages,
-    // The exports only change when the model is re-run and the DB re-seeded —
-    // never during a browsing session. Keep the data forever so navigating
-    // between pages never refetches. A full page reload starts fresh.
+    queryFn: fetchCompactBundle,
+    // The bundles only change when the model is re-run and the static assets
+    // regenerated — never during a browsing session. Keep the data forever so
+    // navigating between pages never refetches. A full page reload starts fresh
+    // (and the browser's immutable cache makes even that free).
     staleTime: Infinity,
     gcTime: Infinity,
   });
+}
+
+/** The 43,996 compact villages (11 map/table fields) + embedded run meta. */
+export function useCompactVillages() {
+  const query = useCompactBundle();
+  return {
+    data: query.data?.villages ?? [],
+    villages: query.data?.villages ?? [],
+    meta: query.data?.meta,
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+  };
 }
 
 /** All 43,996 villages, full records (incl. top_factors). Analytics-only. */

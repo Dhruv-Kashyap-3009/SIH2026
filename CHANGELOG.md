@@ -2,6 +2,30 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Tier-3 fix: relocation-priority vocabulary in static bundles (Sep 2026)
+
+- **Bug**: the `/villages` page went blank (`TypeError: Cannot read properties of undefined (reading 'bg')`). Root cause: the Tier-3 static bundle was built from the export JSON, which keeps the **model's original vocabulary** (`SHORT_TERM` / `MEDIUM_TERM` / `MONITOR`), while the UI (and the seeded database) uses the translated one (`SHORT-TERM` / `MEDIUM-TERM` / `ROUTINE`). The table's `PRIORITY_COLORS[v.relocation_priority]` lookup returned `undefined` for raw values and crashed the page.
+- **Fixes**:
+  - `scripts/generate_frontend_static.py` now applies the same priority translation as `backend/src/seed.ts` when building the compact bundle — bundle counts now match the DB exactly (IMMEDIATE 24,220 · SHORT-TERM 5,467 · MEDIUM-TERM 157 · ROUTINE 14,152).
+  - New **`BUILD_TAG`** mechanism in the generator (+ `STATIC_VERSION` in `frontend/src/lib/villagesStore.js`): regenerating bundles for the same model version produces a new filename (`vyoma_compact_<version>-<tag>.json`). Browsers with an immutable-cached copy of an older bundle fetch the new one via the new URL (the old immutable entry cannot be invalidated by a header change).
+  - Static bundle cache headers: `immutable` is now **production-only**; in development the bundles are served with `max-age=0, must-revalidate` so hand-regenerated files are never served stale.
+  - Defensive guard in `HabitationsPage`: unknown `risk_level` / `relocation_priority` values render a neutral chip instead of crashing the page (this is what let `/villages` render while the stale bundle was in play).
+- Verified live: `/villages` renders 43,996 rows with correctly colored chips (`SHORT-TERM` → `bg-severity-orange`), dashboard priority summary shows 24,220 / 5,467 / 157, first load still only hits the two static files (no DB), zero console errors.
+
+## [Unreleased] — Tier-3: static versioned data bundles, DB-free first load (Sep 2026)
+
+- **Before**: even with the Tier-1 cache, the very first page load after a server restart queried the database for all 43,996 villages (~10-15 s cold).
+- **Now**: the static read path ships as **versioned JSON bundles** served by the backend as plain files with `Cache-Control: public, max-age=31536000, immutable` — the browser downloads each model version once, ever. The database is **never queried for the first page load**.
+- New `scripts/generate_frontend_static.py` builds from the canonical exports (run it after regenerating exports):
+  - `data/processed/static/vyoma_compact_<model_version>.json` — `{ meta: { version, predicted_at, village_count }, villages: [43,996 compact rows, risk desc] }` (10.7 MB raw, ~1.5 MB gzipped)
+  - `data/processed/static/vyoma_sites_<model_version>.json` — 12,211 sites (4.5 MB raw, ~0.5 MB gzipped)
+- Backend: `GET /static/*` mounted on `data/processed/static` (env override `STATIC_DATA_DIR`) with immutable headers; gzip via the existing compression middleware.
+- Frontend: `villagesStore` now reads the compact bundle (embedded `meta` = the dashboard's `predicted_at` / `model_version`); new `sitesStore` reads the sites bundle. Dashboard stat cards, header metadata, priority summary, and the site-capacity card are now **aggregated in the browser** from those bundles (identical source rows to the old `/api/dashboard` — numbers unchanged: RED 27,881 / ORANGE 3,548 / GREEN 12,567 / sites 12,211 / IMMEDIATE 24,220). SitesPage, CapacityPage and Analytics' site charts region-filter the static list client-side. `api.js` exports `API_BASE` and plain GETs no longer send a Content-Type header (no CORS preflight, so static responses are browser-cacheable).
+- Still database-backed (deliberately small/lazy): village detail `/api/villages/:id`, Analytics' full-record fetch (needs per-village `top_factors`), and the `/api/villages/districts` list on state change.
+- Live-verified on the Singapore DB: first page load issued exactly **two** requests — the two static files (~170 ms each) — with zero `/api/dashboard`, `/api/villages` or `/api/sites` calls; dashboard numbers match the previous DB-backed values exactly; all 43,996 villages still render on the map.
+- Note: `STATIC_VERSION` in `frontend/src/lib/villagesStore.js` must stay in sync with the model version of the current exports; bump it when exports are regenerated with a new version.
+- Two bugs found during live verification and fixed: `useAllSites` exposed the raw query result (crash when aggregating before data arrived) and the stores passed absolute URLs into `apiFetch` (which prepends `API_BASE`), doubling the host prefix.
+
 ## [Unreleased] — Tier-2 frontend: one fetch, client-side filtering (Sep 2026)
 
 - **Before**: every page (map, villages table, kanban, analytics) re-queried `GET /api/villages?compact=1` with `?state=`/`&district=` filters on every navigation and every filter change — each a fresh remote-DB round trip over the 43,996-village list (~10-15 s cold).

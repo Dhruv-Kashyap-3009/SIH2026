@@ -1,13 +1,12 @@
 /**
  * Relocation Sites table page.
- * Fetches from GET /api/sites instead of local mock data.
+ * Reads the shared static sites store (Tier 3) and filters client-side.
  */
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import Icon from "../components/ui/Icon.jsx";
 import { SkeletonLoader } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
-import { apiFetch } from "../lib/api.js";
+import { useRegionSites } from "../lib/sitesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 
 const INFRA_KEYS = [
@@ -72,20 +71,11 @@ export default function SitesPage() {
   const [sortConfig, setSortConfig] = useState({ key: "site_id", direction: "asc" });
   const [filters, setFilters] = useState({ suitability: null });
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams();
-    if (selectedDistrict) params.set("district", selectedDistrict);
-    else if (selectedState) params.set("state", selectedState);
-    return params.toString();
-  }, [selectedState, selectedDistrict]);
-
-  const { data: rawSites = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["sites", queryParams],
-    queryFn: () => apiFetch(`/api/sites${queryParams ? `?${queryParams}` : ""}`),
-  });
+  // Tier 3: one static sites bundle per session, region-filtered in memory.
+  const { sites: regionSites = [], isLoading, error, refetch } = useRegionSites();
 
   // Ensure infrastructure is parsed on each site
-  const siteData = useMemo(() => rawSites.map((s) => ({ ...s, infrastructure: parseInfrastructure(s.infrastructure) })), [rawSites]);
+  const siteData = useMemo(() => regionSites.map((s) => ({ ...s, infrastructure: parseInfrastructure(s.infrastructure) })), [regionSites]);
 
   const sites = useMemo(() => {
     let result = [...siteData];

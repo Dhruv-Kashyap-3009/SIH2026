@@ -10,7 +10,6 @@ import CriticalHabitationsTable from "../components/dashboard/CriticalHabitation
 import RelocationPrioritySummary from "../components/dashboard/RelocationPrioritySummary.jsx";
 import RelocationSiteCapacity from "../components/dashboard/RelocationSiteCapacity.jsx";
 import { useCompactVillages } from "../lib/villagesStore.js";
-import { useSelection } from "../context/SelectionContext.jsx";
 import { useRefresh } from "../context/RefreshContext.jsx";
 
 function formatTimestamp(iso) {
@@ -27,8 +26,8 @@ function formatTimestamp(iso) {
 }
 
 export default function Dashboard() {
-  const { selectedState, selectedDistrict } = useSelection();
-  const regionLabel = selectedDistrict || selectedState || "Selected State / Selected District";
+  // National (all-state) overview by design — this page is NOT region-filtered,
+  // so no State/District selection is read or shown here.
 
   // Tier 3: predicted_at / model_version come from the static bundle's meta
   // (embedded by scripts/generate_frontend_static.py) — the header is backed by
@@ -95,11 +94,8 @@ export default function Dashboard() {
       <div className="flex items-end justify-between border-b border-border-subtle pb-stack-sm">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-primary">
-            District Overview
+            Overview
           </h2>
-          <p className="font-label-md text-label-md text-on-surface-variant mt-1">
-            {regionLabel}
-          </p>
         </div>
         <div
           className={`flex items-center gap-2 bg-surface-base px-3 py-1 border rounded-[2px] transition-colors ${

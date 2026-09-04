@@ -3,6 +3,7 @@
  * Contains cascading state/district selectors, hamburger menu (mobile), and trailing action icons.
  */
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Icon from "../ui/Icon.jsx";
 import { useSelection } from "../../context/SelectionContext.jsx";
 import { useRefresh } from "../../context/RefreshContext.jsx";
@@ -102,6 +103,12 @@ export default function TopBar({ onMenuToggle }) {
   const { refreshing, refreshAll, refreshError, refreshStep } = useRefresh();
   const { user } = useAuth();
 
+  // The Dashboard (“/”) is a NATIONAL overview by design — its numbers cover all
+  // 43,996 villages, so the State/District filters are hidden there. They remain
+  // available on every region-filterable page (map, villages, priority, …).
+  const location = useLocation();
+  const isDashboard = location.pathname === "/";
+
   // Surface job failures (backend down, a pipeline step failed, …).
   useEffect(() => {
     if (refreshError) window.alert(`Model refresh failed:\n\n${refreshError}`);
@@ -126,23 +133,25 @@ export default function TopBar({ onMenuToggle }) {
           <Icon name="menu" />
         </button>
 
-        <div className="flex items-center gap-4">
-          <Dropdown
-            label="State"
-            value={selectedState}
-            options={states}
-            onChange={selectState}
-            placeholder="Select State"
-          />
-          <Dropdown
-            label="District"
-            value={selectedDistrict}
-            options={districts}
-            onChange={selectDistrict}
-            placeholder={districtPlaceholder}
-            disabled={!selectedState || districtsLoading}
-          />
-        </div>
+        {!isDashboard && (
+          <div className="flex items-center gap-4">
+            <Dropdown
+              label="State"
+              value={selectedState}
+              options={states}
+              onChange={selectState}
+              placeholder="Select State"
+            />
+            <Dropdown
+              label="District"
+              value={selectedDistrict}
+              options={districts}
+              onChange={selectDistrict}
+              placeholder={districtPlaceholder}
+              disabled={!selectedState || districtsLoading}
+            />
+          </div>
+        )}
       </div>
 
       {/* Right: Refresh + Action icons + Avatar */}
@@ -160,12 +169,6 @@ export default function TopBar({ onMenuToggle }) {
           className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant disabled:opacity-60 disabled:cursor-wait"
         >
           <Icon name="sync" className={refreshing ? "animate-spin text-primary" : ""} />
-        </button>
-        <button className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant">
-          <Icon name="notifications" />
-        </button>
-        <button className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant">
-          <Icon name="settings" />
         </button>
         {/* Signed-in user — initials chip (name/role in the tooltip) */}
         <div

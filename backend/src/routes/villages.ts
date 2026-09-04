@@ -55,6 +55,8 @@ function toFullVillage(v: any) {
     top_factors: v.top_factors,
     low_confidence: v.low_confidence,
     recommended_site_id: v.recommended_site_id,
+    recommended_site_distance_km: v.recommended_site_distance_km ?? null,
+    recommended_site_fit: v.recommended_site_fit ?? null,
     prediction_timestamp: v.prediction_timestamp.toISOString(),
     model_version: v.model_version,
   };
@@ -145,6 +147,8 @@ router.get("/:id", async (req: Request, res: Response) => {
       top_factors: village.top_factors,
       low_confidence: village.low_confidence,
       recommended_site_id: village.recommended_site_id,
+      recommended_site_distance_km: village.recommended_site_distance_km ?? null,
+      recommended_site_fit: village.recommended_site_fit ?? null,
       prediction_timestamp: village.prediction_timestamp.toISOString(),
       model_version: village.model_version,
     };

@@ -5,6 +5,14 @@
 import { useState, useRef, useEffect } from "react";
 import Icon from "../ui/Icon.jsx";
 import { useSelection } from "../../context/SelectionContext.jsx";
+import { useRefresh } from "../../context/RefreshContext.jsx";
+
+const REFRESH_CONFIRM =
+  "Re-run the model now?\n\n" +
+  "This re-predicts all 43,996 villages, regenerates the relocation sites, " +
+  "exports and static bundles, then reloads the database. " +
+  "It takes about 5-15 minutes — you can keep using the app meanwhile.\n\n" +
+  "Continue?";
 
 const AVATAR_URL =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuC4mMRu-wg8rPgnmhYa2OXibt1A0SQy4OkTuDQS5OPE6079trdrcWSzOd4bE2PckNSgIxPxAjcOGU82esfqyw_EtPTYY30AizDP2SRdBjzVou67YVm54kUXZb8JJ5nxjBB2p2A9QMa0ZV0kRLIdVqbj6OxBgm81mEer6z8VlZAkQ5xYxw5FQstILmFc4Rx3LhtL-uDkn9fOIBkIxbedTmXX6MWS5u8WCSYSz4z_FOHto_lKrceKpEEyiQ";
@@ -82,6 +90,12 @@ export default function TopBar({ onMenuToggle }) {
     selectState,
     selectDistrict,
   } = useSelection();
+  const { refreshing, refreshAll, refreshError, refreshStep } = useRefresh();
+
+  // Surface job failures (backend down, a pipeline step failed, …).
+  useEffect(() => {
+    if (refreshError) window.alert(`Model refresh failed:\n\n${refreshError}`);
+  }, [refreshError]);
 
   const districtPlaceholder =
     !selectedState
@@ -121,8 +135,22 @@ export default function TopBar({ onMenuToggle }) {
         </div>
       </div>
 
-      {/* Right: Action icons + Avatar */}
+      {/* Right: Refresh + Action icons + Avatar */}
       <div className="flex items-center gap-4">
+        <button
+          onClick={() => {
+            if (window.confirm(REFRESH_CONFIRM)) refreshAll();
+          }}
+          disabled={refreshing}
+          title={
+            refreshing
+              ? `Re-running the model: ${refreshStep?.message || "working…"} — this takes several minutes`
+              : "Re-run the model: re-predict all villages, regenerate exports, reload the database (~5-15 min)"
+          }
+          className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant disabled:opacity-60 disabled:cursor-wait"
+        >
+          <Icon name="sync" className={refreshing ? "animate-spin text-primary" : ""} />
+        </button>
         <button className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant">
           <Icon name="notifications" />
         </button>

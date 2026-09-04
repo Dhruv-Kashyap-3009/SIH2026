@@ -14,50 +14,105 @@
  * Analytics additionally needs the FULL per-village records (top_factors,
  * model_version, prediction_timestamp), so it lazily loads those from the API
  * once (only when the page is first opened) and filters the same way.
+ *
+ * VERSION DISCOVERY: the bundle filename embeds the model run's predicted_at
+ * (scripts/generate_frontend_static.py derives it), so every model refresh
+ * produces a NEW URL — that is the only thing that defeats a browser's
+ * `immutable` cache. The frontend therefore never pins a version string; it
+ * fetches the tiny latest.json pointer (served with Cache-Control: no-store)
+ * and then the current bundle by name. Refresh → new run tag → new URL → the
+ * browser downloads the fresh bundle automatically.
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSelection } from "../context/SelectionContext.jsx";
 import { apiFetch } from "./api.js";
 
-/**
- * Identity of the current static bundles (model version + generator build tag,
- * e.g. "v1.1-susceptibility-2"). Must match the filenames emitted by
- * scripts/generate_frontend_static.py (BUILD_TAG there). Bump whenever the
- * exports are regenerated — the URL changes, so browsers with an
- * immutable-cached copy of an older bundle fetch the new one automatically.
- */
-export const STATIC_VERSION = "v1.1-susceptibility-2";
-
 /** Shared query keys — any consumer using these dedupes to one network fetch. */
+export const MANIFEST_KEY = ["static", "manifest"];
 export const COMPACT_KEY = ["villages", "all", "compact"];
 export const FULL_KEY = ["villages", "all", "full"];
 
-const COMPACT_PATH = `/static/vyoma_compact_${STATIC_VERSION}.json`;
+const MANIFEST_PATH = "/static/latest.json";
 
-const fetchCompactBundle = () => apiFetch(COMPACT_PATH);
+// Never let the browser cache the pointer: no-store forces a network fetch,
+// so after a model refresh + page reload the manifest always names the newest
+// bundle (whose immutable-cached content may have changed).
+const fetchManifest = () => apiFetch(MANIFEST_PATH, { cache: "no-store" });
+
+/**
+ * Analytics-only: the full per-village records (top_factors, model_version,
+ * prediction_timestamp) are not in the compact bundle, so they are lazily
+ * fetched from the API once per session when /analytics is first opened
+ * (query key FULL_KEY dedupes to a single network fetch).
+ */
 const fetchFullVillages = () => apiFetch("/api/villages");
 
-/** Warm the compact cache at app startup (see App.jsx). */
-export function prefetchCompactVillages(queryClient) {
-  return queryClient.prefetchQuery({
-    queryKey: COMPACT_KEY,
-    queryFn: fetchCompactBundle,
-  });
-}
+const bundleKey = (kind, file) => ["static", kind, file];
 
-/** The full static bundle { meta, villages } — 43,996 compact rows. */
-export function useCompactBundle() {
+/** latest.json — { version, predicted_at, compact: "<file>", sites: "<file>" }. */
+export function useStaticManifest() {
   return useQuery({
-    queryKey: COMPACT_KEY,
-    queryFn: fetchCompactBundle,
-    // The bundles only change when the model is re-run and the static assets
-    // regenerated — never during a browsing session. Keep the data forever so
-    // navigating between pages never refetches. A full page reload starts fresh
-    // (and the browser's immutable cache makes even that free).
+    queryKey: MANIFEST_KEY,
+    queryFn: fetchManifest,
     staleTime: Infinity,
     gcTime: Infinity,
   });
+}
+
+/** Warm the compact cache at app startup (see App.jsx). */
+export async function prefetchCompactVillages(queryClient) {
+  try {
+    await queryClient.prefetchQuery({
+      queryKey: MANIFEST_KEY,
+      queryFn: fetchManifest,
+      staleTime: Infinity,
+      gcTime: Infinity,
+    });
+    const manifest = queryClient.getQueryData(MANIFEST_KEY);
+    const file = manifest?.compact;
+    if (file) {
+      await queryClient.prefetchQuery({
+        queryKey: bundleKey("compact", file),
+        queryFn: () => apiFetch(`/static/${file}`),
+        staleTime: Infinity,
+        gcTime: Infinity,
+      });
+    }
+  } catch {
+    /* startup warm — a failure here surfaces through the hooks below */
+  }
+}
+
+/**
+ * The current static bundle { meta, villages } — 43,996 compact rows.
+ * Resolves the filename from latest.json first, then fetches that bundle.
+ */
+export function useCompactBundle() {
+  const manifestQ = useStaticManifest();
+  const file = manifestQ.data?.compact;
+  const compactQ = useQuery({
+    queryKey: bundleKey("compact", file),
+    queryFn: () => apiFetch(`/static/${file}`),
+    enabled: !!file,
+    // Bundles only change when the model is re-run and regenerated — never
+    // during a browsing session. Keep the data forever so navigating between
+    // pages never refetches. A full page reload starts fresh.
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return {
+    data: compactQ.data,
+    meta: compactQ.data?.meta,
+    isLoading: manifestQ.isLoading || compactQ.isLoading,
+    isFetching: manifestQ.isFetching || compactQ.isFetching,
+    error: manifestQ.error ?? compactQ.error,
+    refetch: () =>
+      Promise.all([
+        manifestQ.refetch(),
+        file ? compactQ.refetch() : Promise.resolve(),
+      ]),
+  };
 }
 
 /** The 43,996 compact villages (11 map/table fields) + embedded run meta. */
@@ -66,7 +121,7 @@ export function useCompactVillages() {
   return {
     data: query.data?.villages ?? [],
     villages: query.data?.villages ?? [],
-    meta: query.data?.meta,
+    meta: query.meta,
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,

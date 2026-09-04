@@ -14,6 +14,7 @@ import NotFoundPage from "./pages/NotFoundPage.jsx";
 import HelpPage from "./pages/HelpPage.jsx";
 import LogoutPage from "./pages/LogoutPage.jsx";
 import { SelectionProvider } from "./context/SelectionContext.jsx";
+import { RefreshProvider } from "./context/RefreshContext.jsx";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { prefetchCompactVillages } from "./lib/villagesStore.js";
 
@@ -38,6 +39,7 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+    <RefreshProvider>
     <SelectionProvider>
     <div className="flex h-screen overflow-hidden font-body-md">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -59,6 +61,7 @@ export default function App() {
       </div>
     </div>
     </SelectionProvider>
+    </RefreshProvider>
     </QueryClientProvider>
   );
 }

@@ -8,6 +8,21 @@ import Icon from "../components/ui/Icon.jsx";
 import { SkeletonLoader } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
 import { apiFetch } from "../lib/api.js";
+import { useAllSites } from "../lib/sitesStore.js";
+
+// Capacity fit of the relocation assignment (how much of the village's
+// population the destination site can absorb) — relocation cost proxy.
+const FIT_COLORS = {
+  full: "text-severity-green",
+  partial: "text-severity-amber",
+  minimal: "text-severity-red",
+};
+const FIT_LABELS = { full: "Full", partial: "Partial", minimal: "Minimal" };
+const FIT_TITLES = {
+  full: "Destination can absorb the entire relocated population",
+  partial: "Destination absorbs 50–100% of the relocated population",
+  minimal: "Destination absorbs under 50% of the relocated population",
+};
 
 // Risk level: RED/ORANGE/GREEN
 const RISK_LEVEL_COLORS = {
@@ -136,6 +151,16 @@ export default function HabitationDetailPage() {
     retry: false,
   });
 
+  // Destination-site register (static bundle) — resolves recommended_site_id
+  // to the site's name / district / state for the relocation card below.
+  const { sites } = useAllSites();
+  const destSite = hab?.recommended_site_id
+    ? sites.find((s) => s.site_id === hab.recommended_site_id) || null
+    : null;
+
+  const distKm = hab?.recommended_site_distance_km;
+  const fit = hab?.recommended_site_fit;
+
   if (isLoading) return <LoadingSkeleton />;
 
   // API returns 404 → fetch throws, or returns { error: "Village not found" }
@@ -201,14 +226,36 @@ export default function HabitationDetailPage() {
               </div>
             </div>
 
-            {/* Recommended Site */}
+            {/* Recommended Site + Relocation */}
             <div className={`bg-phase-elevated rounded-[4px] border border-[#1E2330] p-4 ${hab.recommended_site_id ? "cursor-pointer hover:border-[#2A3040] transition-colors" : ""}`}>
               <h3 className="text-[13px] font-semibold text-phase-text mb-3 flex items-center gap-2">
                 <Icon name="location_city" className="text-[16px] text-phase-text-secondary" />Recommended Site
               </h3>
               {hab.recommended_site_id ? (
                 <div className="space-y-2">
-                  <div className="flex justify-between"><span className="text-[13px] text-phase-text-secondary">Site</span><span className="text-[13px] text-phase-text">{hab.recommended_site_id}</span></div>
+                  <div className="flex justify-between"><span className="text-[13px] text-phase-text-secondary">Destination</span><span className="text-[13px] text-phase-text text-right">{destSite?.name || hab.recommended_site_id}</span></div>
+                  {destSite && (
+                    <div className="flex justify-between"><span className="text-[13px] text-phase-text-secondary">Location</span><span className="text-[13px] text-phase-text text-right">{destSite.district}, {destSite.state}</span></div>
+                  )}
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-[13px] text-phase-text-secondary">Distance</span>
+                    <span className="text-[13px] text-phase-text font-mono">
+                      {typeof distKm === "number" ? `${distKm.toFixed(1)} km` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-[13px] text-phase-text-secondary">Capacity fit</span>
+                    {fit ? (
+                      <span
+                        className={`text-[12px] font-mono ${FIT_COLORS[fit] || "text-phase-text-secondary"}`}
+                        title={FIT_TITLES[fit]}
+                      >
+                        {FIT_LABELS[fit] || fit}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] text-phase-text-secondary">—</span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-[2px] bg-[#1A1E28] border border-[#2A3040]">

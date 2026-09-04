@@ -21,8 +21,10 @@ def test_readme_consistency():
     orange = int(pred.get('ORANGE', 0))
     green = int(pred.get('GREEN', 0))
 
-    # README claims (updated to susceptibility distribution)
-    readme_red, readme_orange, readme_green = 27881, 3548, 12567
+    # README claims (updated to susceptibility distribution — current-model run
+    # of 2026-09-04, which re-predicted with the LOSO-tuned model that had been
+    # retrained after the previous Sep-2 export)
+    readme_red, readme_orange, readme_green = 26576, 6049, 11371
 
     print(f"Susceptibility headline: RED={red} ORANGE={orange} GREEN={green} TOTAL={total}")
     if red != readme_red:
@@ -66,13 +68,13 @@ def test_readme_consistency():
 
     # ── TEST 3: README per-state numbers match (susceptibility model) ──
     readme_states = {
-        'Assam': (25854, 14906, 57.7),
-        'Meghalaya': (6839, 4763, 69.6),
-        'Arunachal Pradesh': (5589, 3211, 57.5),
-        'Manipur': (2581, 2454, 95.1),
-        'Nagaland': (1428, 1370, 95.9),
-        'Tripura': (875, 367, 41.9),
-        'Mizoram': (830, 810, 97.6),
+        'Assam': (25854, 13892, 53.7),
+        'Meghalaya': (6839, 4578, 66.9),
+        'Arunachal Pradesh': (5589, 3120, 55.8),
+        'Manipur': (2581, 2501, 96.9),
+        'Nagaland': (1428, 1390, 97.3),
+        'Tripura': (875, 291, 33.3),
+        'Mizoram': (830, 804, 96.9),
     }
     for s, (rt, rr, rpct) in readme_states.items():
         actual_t = int(state_total.get(s, 0))

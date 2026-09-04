@@ -2,6 +2,7 @@
  * Dashboard page matching the exact Stitch design.
  * Composes all dashboard sections: header, stats, map+table, bottom row.
  */
+import { useEffect, useRef } from "react";
 import Icon from "../components/ui/Icon.jsx";
 import StatsRow from "../components/dashboard/StatsRow.jsx";
 import MapPanel from "../components/dashboard/MapPanel.jsx";
@@ -10,6 +11,7 @@ import RelocationPrioritySummary from "../components/dashboard/RelocationPriorit
 import RelocationSiteCapacity from "../components/dashboard/RelocationSiteCapacity.jsx";
 import { useCompactVillages } from "../lib/villagesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
+import { useRefresh } from "../context/RefreshContext.jsx";
 
 function formatTimestamp(iso) {
   if (!iso) return null;
@@ -32,8 +34,60 @@ export default function Dashboard() {
   // (embedded by scripts/generate_frontend_static.py) — the header is backed by
   // real run metadata without any database call.
   const { meta } = useCompactVillages();
+  const { refreshing, lastSyncedAt, refreshStep } = useRefresh();
 
   const predictedLabel = formatTimestamp(meta?.predicted_at);
+  // Bundle meta carries the run identity under `version` (not model_version).
+  const runVersion = meta?.version || meta?.model_version;
+
+  // Snapshot the run identity before a refresh starts, so we can flash
+  // "Updated" when the re-pull actually delivered a newer model run.
+  const prevRun = useRef(null);
+  useEffect(() => {
+    if (refreshing && meta?.predicted_at) {
+      prevRun.current = `${meta.predicted_at}|${runVersion ?? ""}`;
+    }
+  }, [refreshing, meta, runVersion]);
+
+  const runChanged =
+    !refreshing &&
+    prevRun.current !== null &&
+    !!meta?.predicted_at &&
+    prevRun.current !== `${meta.predicted_at}|${runVersion ?? ""}`;
+
+  // Sync chip states:
+  //   idle          → "Predicted <model run date>" (before the first refresh)
+  //   refreshing    → spinning sync + "Refreshing data…"
+  //   synced        → "✓ Synced <refresh date>" — PERSISTS after each refresh,
+  //                   so clicking the button always visibly updates the date
+  //                   (the model-run date is kept in the tooltip + title)
+  //   run changed   → "✓ Updated · Predicted <new run date>" (a re-pull
+  //                   actually delivered a newer model run)
+  let chipIcon = "sync";
+  let chipSpin = false;
+  let chipText;
+  let chipTitle;
+  if (refreshing) {
+    chipSpin = true;
+    chipText = "Re-running model…";
+    chipTitle =
+      refreshStep?.message ||
+      "Re-running the model on the server — predictions, exports and database reload. This takes several minutes…";
+  } else if (runChanged) {
+    chipIcon = "check_circle";
+    chipText = `✓ Updated · Predicted ${predictedLabel}${runVersion ? ` · ${runVersion}` : ""}`;
+    chipTitle = `New model run detected — the on-screen data now reflects the run of ${predictedLabel}.`;
+  } else if (lastSyncedAt) {
+    chipIcon = "check_circle";
+    chipText = `✓ Synced ${formatTimestamp(lastSyncedAt)}${runVersion ? ` · ${runVersion}` : ""}`;
+    chipTitle = `Last refreshed: ${formatTimestamp(lastSyncedAt)}. Model run date: ${predictedLabel ?? "n/a"} · ${runVersion ?? ""} — click the sync icon in the top bar to refresh again.`;
+  } else {
+    chipText = predictedLabel
+      ? `Predicted ${predictedLabel}${runVersion ? ` · ${runVersion}` : ""}`
+      : "Model run metadata unavailable";
+    chipTitle = "The date/time the on-screen data was predicted by the model — click the sync icon in the top bar to refresh and re-sync now.";
+  }
+  const chipHighlighted = !refreshing && (runChanged || !!lastSyncedAt);
 
   return (
     <main className="flex-1 overflow-y-auto p-margin-page flex flex-col gap-stack-lg bg-surface-lowest">
@@ -47,13 +101,16 @@ export default function Dashboard() {
             {regionLabel}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-on-surface-variant bg-surface-base px-3 py-1 border border-border-subtle rounded-[2px]">
-          <Icon name="sync" className="text-[14px]" />
-          <span className="font-label-sm text-label-sm">
-            {predictedLabel
-              ? `Predicted ${predictedLabel}${meta?.model_version ? ` · ${meta.model_version}` : ""}`
-              : "Model run metadata unavailable"}
-          </span>
+        <div
+          className={`flex items-center gap-2 bg-surface-base px-3 py-1 border rounded-[2px] transition-colors ${
+            chipHighlighted
+              ? "border-severity-green/40 text-severity-green"
+              : "border-border-subtle text-on-surface-variant"
+          }`}
+          title={chipTitle}
+        >
+          <Icon name={chipIcon} className={`text-[14px] ${chipSpin ? "animate-spin" : ""}`} />
+          <span className="font-label-sm text-label-sm">{chipText}</span>
         </div>
       </div>
 

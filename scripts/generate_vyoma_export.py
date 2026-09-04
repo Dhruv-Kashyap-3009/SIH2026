@@ -25,12 +25,21 @@ CANONICAL FIELD MAPPING (resolves VYOMA's Q1-Q5):
   recommended_site_id    = site_id of the GREEN village assigned by
                             relocation_plan.csv, or null (no feasible site
                             within 50km / village not a relocation source)
+  recommended_site_distance_km = relocation distance from relocation_plan.csv
+                            (null when recommended_site_id is null)
+  recommended_site_fit   = capacity fit of that assignment
+                            ("full" / "partial" / "minimal", null when no
+                            assignment) — relocation cost proxy: farther +
+                            tighter fit = more expensive relocation
   prediction_timestamp   = predicted_at (ISO-8601 run timestamp)
   model_version          = "v1.1-susceptibility"
 
 Deliberately EXCLUDED (per VYOMA schema): raw Census columns, all six zone
-variants, all nine score variants. This script is the single source of truth
-for "what VYOMA sees".
+variants, all nine score variants. The two recommended_site_* fields are
+OPTIONAL extensions of the original 16-field contract (null for every village
+without a relocation assignment) — the village detail page renders them and
+backends may ignore them if the extra keys are not needed.
+This script is the single source of truth for "what VYOMA sees".
 
 Sites export mirrors data/processed/relocation_sites.json (site_id == the
 GREEN village's habitation_id, so recommended_site_id always resolves).
@@ -126,6 +135,10 @@ def build_village_rows(pred_df, plan_df, state=None):
 
     site_by_red_hid = assigned.set_index('red_habitation_id')['recommended_site_id']
     site_by_red_hid = site_by_red_hid[site_by_red_hid.notna() & (site_by_red_hid != '')]
+    # Relocation cost proxy per assignment: distance to the destination + how
+    # well the site's capacity fits the village's population (from the plan).
+    dist_by_red_hid = assigned.set_index('red_habitation_id')['distance_km']
+    fit_by_red_hid = assigned.set_index('red_habitation_id')['capacity_fit']
 
     pred_by_hid = pred_df.set_index('habitation_id')
     red_assigned = assigned['red_habitation_id'].dropna()
@@ -136,8 +149,12 @@ def build_village_rows(pred_df, plan_df, state=None):
         hid = r['habitation_id']
         pop = r.get('Total Population of Village')
         rec_site = None
+        rec_dist = None
+        rec_fit = None
         if hid in site_by_red_hid.index:
             rec_site = site_by_red_hid[hid]
+            rec_dist = dist_by_red_hid[hid]
+            rec_fit = fit_by_red_hid[hid]
 
         rows.append({
             'village_id': hid,
@@ -154,6 +171,8 @@ def build_village_rows(pred_df, plan_df, state=None):
             'top_factors': _parse_top_factors(r.get('top_factors')),
             'low_confidence': bool(r.get('low_confidence', False)),
             'recommended_site_id': rec_site,
+            'recommended_site_distance_km': _num(rec_dist, 1),
+            'recommended_site_fit': (rec_fit if isinstance(rec_fit, str) else None),
             'prediction_timestamp': r.get('predicted_at'),
             'model_version': MODEL_VERSION,
         })

@@ -17,7 +17,8 @@ VILLAGE_KEYS = [
     'village_id', 'name', 'district', 'state', 'latitude', 'longitude',
     'population', 'risk_score', 'risk_level', 'relocation_priority',
     'vulnerability_multiplier', 'top_factors', 'low_confidence',
-    'recommended_site_id', 'prediction_timestamp', 'model_version',
+    'recommended_site_id', 'recommended_site_distance_km',
+    'recommended_site_fit', 'prediction_timestamp', 'model_version',
 ]
 SITE_KEYS = [
     'site_id', 'name', 'district', 'state', 'latitude', 'longitude',
@@ -103,6 +104,23 @@ def validate(vpath, spath):
                 if v['recommended_site_id'] and v['recommended_site_id'] not in site_ids}
     check("every recommended_site_id resolves to a site row (null allowed)",
           len(dangling) == 0, errors)
+
+    # ── recommended_site_distance_km / recommended_site_fit coherence ──────
+    # The two relocation fields are optional extensions of the contract: they
+    # must be present on every row, be null exactly when there is no assigned
+    # site, and be populated (numeric distance > 0, vocab capacity fit) exactly
+    # when recommended_site_id is set.
+    has_site = [v for v in villages if v['recommended_site_id']]
+    no_site = [v for v in villages if not v['recommended_site_id']]
+    check("recommended_site_distance_km numeric > 0 whenever a site is assigned",
+          all(isinstance(v['recommended_site_distance_km'], (int, float))
+              and v['recommended_site_distance_km'] > 0 for v in has_site), errors)
+    check("recommended_site_fit in {full, partial, minimal} whenever a site is assigned",
+          all(v['recommended_site_fit'] in ('full', 'partial', 'minimal')
+              for v in has_site), errors)
+    check("both relocation fields null when no site is assigned",
+          all(v['recommended_site_distance_km'] is None
+              and v['recommended_site_fit'] is None for v in no_site), errors)
 
     # ── Site-row invariants ────────────────────────────────────────────────
     check("site_id unique, non-null",

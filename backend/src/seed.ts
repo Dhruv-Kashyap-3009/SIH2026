@@ -128,6 +128,9 @@ async function main() {
       top_factors: v.top_factors as any,
       low_confidence: v.low_confidence,
       recommended_site_id: v.recommended_site_id,
+      // Optional relocation detail (null when no assignment exists)
+      recommended_site_distance_km: v.recommended_site_distance_km ?? null,
+      recommended_site_fit: v.recommended_site_fit ?? null,
       prediction_timestamp: new Date(v.prediction_timestamp),
       model_version: v.model_version,
     };

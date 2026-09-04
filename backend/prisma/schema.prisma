@@ -25,6 +25,8 @@ model Village {
   top_factors             Json     // array of { feature: string, value: string, impact: "high"|"medium"|"low" }
   low_confidence          Boolean
   recommended_site_id     String?
+  recommended_site_distance_km Float? // relocation distance to that site (relocation cost proxy)
+  recommended_site_fit    String?      // "full" | "partial" | "minimal" | null
   prediction_timestamp    DateTime
   model_version           String
 

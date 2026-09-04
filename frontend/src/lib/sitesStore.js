@@ -11,29 +11,41 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSelection } from "../context/SelectionContext.jsx";
 import { apiFetch } from "./api.js";
-import { STATIC_VERSION } from "./villagesStore.js";
+import { useStaticManifest } from "./villagesStore.js";
 
 export const SITES_KEY = ["sites", "all", "static"];
 
-const SITES_PATH = `/static/vyoma_sites_${STATIC_VERSION}.json`;
+const bundleKey = (file) => ["static", "sites", file];
 
-const fetchSites = () => apiFetch(SITES_PATH);
-
-/** All 12,211 relocation sites (static bundle). */
+/**
+ * All relocation sites (static bundle named by latest.json).
+ * The filename embeds the model run tag (see villagesStore.js), so after a
+ * model refresh + reload the manifest names a NEW file — a browser that has
+ * the old file immutable-cached fetches the fresh one via the new URL.
+ */
 export function useAllSites() {
+  const manifestQ = useStaticManifest();
+  const file = manifestQ.data?.sites;
   const query = useQuery({
-    queryKey: SITES_KEY,
-    queryFn: fetchSites,
+    queryKey: bundleKey(file),
+    queryFn: () => apiFetch(`/static/${file}`),
+    enabled: !!file,
     staleTime: Infinity,
     gcTime: Infinity,
   });
+  const data = query.data ?? [];
   return {
-    data: query.data ?? [],
-    sites: query.data ?? [],
-    isLoading: query.isLoading,
-    error: query.error,
-    refetch: query.refetch,
-    isFetching: query.isFetching,
+    data,
+    sites: data,
+    allSites: data,
+    isLoading: manifestQ.isLoading || query.isLoading,
+    error: manifestQ.error ?? query.error,
+    refetch: () =>
+      Promise.all([
+        manifestQ.refetch(),
+        file ? query.refetch() : Promise.resolve(),
+      ]),
+    isFetching: manifestQ.isFetching || query.isFetching,
   };
 }
 

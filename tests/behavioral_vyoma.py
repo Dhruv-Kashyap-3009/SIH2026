@@ -56,8 +56,8 @@ def main():
     check("generate_relocation_sites.py exits 0", code1 == 0, out1[-800:])
     code2, out2 = run_script(['scripts/generate_vyoma_export.py', '--state', 'Mizoram'])
     check("generate_vyoma_export.py (Mizoram) exits 0", code2 == 0, out2[-800:])
-    check("sites script reports 12,211 rows / 446 ideal",
-          '12,211 rows, is_ideal (>= 0.8): 446' in out1, out1[-500:])
+    check("sites script reports 10,603 rows / 406 ideal",
+          '10,603 rows, is_ideal (>= 0.8): 406' in out1, out1[-500:])
     check("no dangling warnings in either run",
           '⚠️' not in out1 and '⚠️' not in out2, out1[-300:] + out2[-300:])
 
@@ -71,8 +71,9 @@ def main():
                      'longitude', 'population', 'risk_score', 'risk_level',
                      'relocation_priority', 'vulnerability_multiplier',
                      'top_factors', 'low_confidence', 'recommended_site_id',
+                     'recommended_site_distance_km', 'recommended_site_fit',
                      'prediction_timestamp', 'model_version'}
-    check("exact 16 canonical fields (no zone/score/census variants leaked)",
+    check("exact 18 canonical fields (16 + relocation distance/fit extensions)",
           vkeys == expected_keys, str(vkeys ^ expected_keys))
 
     vdf = pd.DataFrame(villages)
@@ -90,9 +91,9 @@ def main():
     check("vulnerability_multiplier equals vulnerability_score",
           np.allclose(vdf['vulnerability_multiplier'], vdf['village_id'].map(
               lambda h: hid2.loc[h, 'vulnerability_score']), atol=1e-4))
-    check("Mizoram zone mix = 810 RED / 9 ORANGE / 11 GREEN",
+    check("Mizoram zone mix = 804 RED / 25 ORANGE / 1 GREEN",
           vdf['risk_level'].value_counts().to_dict() ==
-          {'RED': 810, 'ORANGE': 9, 'GREEN': 11},
+          {'RED': 804, 'ORANGE': 25, 'GREEN': 1},
           str(vdf['risk_level'].value_counts().to_dict()))
     check("types: numbers not strings, booleans not strings, ISO timestamps",
           all(isinstance(x, (int, float)) for x in vdf['risk_score']) and
@@ -110,11 +111,11 @@ def main():
     check("Mizoram sites export non-empty", len(sites) >= 26, len(sites))
     sites_reg = json.load(open(os.path.join(DATA, 'relocation_sites.json'),
                                encoding='utf-8'))
-    check("full site register = 12,211 rows (canonical-GREEN only)",
-          len(sites_reg) == 12211, len(sites_reg))
+    check("full site register = 10,603 rows (canonical-GREEN only)",
+          len(sites_reg) == 10603, len(sites_reg))
     n_ideal = sum(1 for s in sites_reg if s['is_ideal'])
-    check("is_ideal == carrying_capacity_score >= 0.8 (446)",
-          n_ideal == 446, n_ideal)
+    check("is_ideal == carrying_capacity_score >= 0.8 (406)",
+          n_ideal == 406, n_ideal)
 
     reg = pd.DataFrame(sites_reg)
     # Canonical-safety invariant: NO destination may be RED/ORANGE under the
@@ -174,11 +175,28 @@ def main():
     print("\n[5] recommended_site_id ↔ relocation_plan traceability")
     hid_to_plan_site = assigned.set_index('red_habitation_id')['site_id']
     rec = vdf[vdf['recommended_site_id'].notna()]
-    check("66 Mizoram villages have a recommended site", len(rec) == 66, len(rec))
+    check("47 Mizoram villages have a recommended site", len(rec) == 47, len(rec))
     mism = sum(1 for _, r in rec.iterrows()
                if hid_to_plan_site.get(r['village_id']) != r['recommended_site_id'])
     check("every village recommended_site_id equals its plan row's target "
           f"({mism} mismatches)", mism == 0)
+    # Relocation cost fields ride along with the assignment: distance + fit
+    # must mirror the plan rows for the same 66 assigned villages.
+    dist_ok = np.allclose(
+        vdf.loc[rec.index, 'recommended_site_distance_km'],
+        rec['village_id'].map(lambda h: plan.set_index('red_habitation_id')
+                              .loc[h, 'distance_km']), atol=0.15)
+    check("recommended_site_distance_km mirrors plan distance on assigned rows",
+          dist_ok)
+    fit_ok = (vdf.loc[rec.index, 'recommended_site_fit'] ==
+              rec['village_id'].map(lambda h: plan.set_index('red_habitation_id')
+                                    .loc[h, 'capacity_fit'])).all()
+    check("recommended_site_fit mirrors plan capacity_fit on assigned rows",
+          fit_ok)
+    no_rec = vdf[vdf['recommended_site_id'].isna()]
+    check("distance/fit null on every village without an assignment",
+          no_rec['recommended_site_distance_km'].isna().all()
+          and no_rec['recommended_site_fit'].isna().all())
     site_id_set = set(sites_reg_ids := [s['site_id'] for s in sites_reg])
     dangling = rec[~rec['recommended_site_id'].isin(site_id_set)]
     check("all recommended_site_id exist in the full site register",
@@ -208,8 +226,8 @@ def main():
     check("all assigned green targets are real capacity candidates",
           green_ids.isin(cc['Village Code']).all())
     assigned_frac = (plan['feasibility_flag'] == 'assigned').mean()
-    check("9,972/29,687 assigned (33.6%)",
-          abs(assigned_frac - 0.3359) < 0.002, assigned_frac)
+    check("8,701/29,687 assigned (29.3%)",
+          abs(assigned_frac - 0.2931) < 0.002, assigned_frac)
     # Canonical-safety: every assigned target must itself be canonical GREEN
     tgt_zone = (cc.merge(pred[['Village Code', 'susceptibility_risk_zone']],
                          on='Village Code', how='left')
@@ -231,10 +249,10 @@ def main():
     all_ids = [x['village_id'] for x in allv]
     check("village_id unique in full export", len(set(all_ids)) == 43996)
     check("full export zones sum to susceptibility totals "
-          "(RED 27,881 / ORANGE 3,548 / GREEN 12,567)",
+          "(RED 26,576 / ORANGE 6,049 / GREEN 11,371)",
           {k: sum(1 for x in allv if x['risk_level'] == k)
            for k in ('RED', 'ORANGE', 'GREEN')} ==
-          {'RED': 27881, 'ORANGE': 3548, 'GREEN': 12567})
+          {'RED': 26576, 'ORANGE': 6049, 'GREEN': 11371})
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print("\n" + "=" * 70)

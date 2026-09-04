@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import Icon from "../ui/Icon.jsx";
 
 const NAV_ITEMS = [
-  { icon: "dashboard", label: "Dashboard", to: "/" },
+  { icon: "dashboard", label: "Dashboard", to: "/dashboard" },
   { icon: "map", label: "Hazard Map", to: "/map" },
   { icon: "home_pin", label: "Villages", to: "/villages" },
   { icon: "priority_high", label: "Relocation Priority", to: "/priority" },
@@ -19,7 +19,7 @@ function SidebarLink({ icon, label, to, onClick }) {
   return (
     <NavLink
       to={to}
-      end={to === "/"}
+      end={to === "/" || to === "/dashboard"}
       onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2 rounded-[4px] font-label-md text-label-md transition-all duration-150 ease-in-out ${

@@ -19,7 +19,7 @@ export default function NotFoundPage() {
           The requested route does not exist in the VYOMA operational suite.
         </p>
         <Link
-          to="/"
+          to="/dashboard"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-[4px] bg-phase-card border border-[#1E2330] text-phase-text text-[13px] font-mono hover:bg-phase-elevated transition-colors"
         >
           <Icon name="dashboard" className="text-[16px]" />

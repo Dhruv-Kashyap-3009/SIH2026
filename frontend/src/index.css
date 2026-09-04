@@ -35,3 +35,34 @@ body {
 /* MapLibre overrides for dark theme */
 .maplibregl-ctrl-logo { display: none !important; }
 .maplibregl-ctrl-attrib { display: none !important; }
+
+/* ── Loading skeleton: shimmer sweep (Analytics etc.) ─────────────────── */
+@keyframes vyoma-shimmer {
+  0% { background-position: -450px 0; }
+  100% { background-position: 450px 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 900px 100%;
+  background-repeat: no-repeat;
+  animation: vyoma-shimmer 1.4s linear infinite;
+}
+
+/* Animated ellipsis for “Loading…” labels */
+@keyframes vyoma-loading-dots {
+  0%, 20% { content: ""; }
+  40% { content: "."; }
+  60% { content: ".."; }
+  80%, 100% { content: "..."; }
+}
+
+.loading-dots::after {
+  content: "";
+  animation: vyoma-loading-dots 1.4s steps(1, end) infinite;
+}

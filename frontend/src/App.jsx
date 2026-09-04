@@ -50,7 +50,7 @@ function RequireAuth() {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/" replace />; // “/” IS the sign-in page
   return <Outlet />;
 }
 
@@ -83,14 +83,14 @@ export default function App() {
     <AuthProvider>
     <RefreshProvider>
       <Routes>
-        {/* Public — no session needed */}
-        <Route path="/login" element={<LoginPage />} />
+        {/* Public — no session needed. “/” is the sign-in page. */}
+        <Route path="/" element={<LoginPage />} />
         <Route path="/logout" element={<LogoutPage />} />
 
         {/* Everything below the login gate */}
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/villages" element={<HabitationsPage />} />
             <Route path="/villages/:id" element={<HabitationDetailPage />} />
             <Route path="/priority" element={<PriorityPage />} />

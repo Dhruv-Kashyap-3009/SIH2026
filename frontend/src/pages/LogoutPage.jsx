@@ -17,7 +17,7 @@ export default function LogoutPage() {
   useEffect(() => {
     logout();
     const t = setTimeout(
-      () => navigate("/login", { replace: true, state: { signedOut: true } }),
+      () => navigate("/", { replace: true, state: { signedOut: true } }),
       400
     );
     return () => clearTimeout(t);
@@ -28,7 +28,7 @@ export default function LogoutPage() {
   // keeps showing it until the navigation fires. Safe no-op for guests.
   if (!user) {
     // Fallback in case navigation is blocked — never strand the user.
-    return <Navigate to="/login" replace state={{ signedOut: true }} />;
+    return <Navigate to="/" replace state={{ signedOut: true }} />;
   }
 
   return (

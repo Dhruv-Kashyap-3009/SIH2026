@@ -107,7 +107,7 @@ export default function TopBar({ onMenuToggle }) {
   // 43,996 villages, so the State/District filters are hidden there. They remain
   // available on every region-filterable page (map, villages, priority, …).
   const location = useLocation();
-  const isDashboard = location.pathname === "/";
+  const isDashboard = location.pathname === "/dashboard";
 
   // Surface job failures (backend down, a pipeline step failed, …).
   useEffect(() => {

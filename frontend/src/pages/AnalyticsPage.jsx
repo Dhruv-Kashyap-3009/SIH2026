@@ -13,8 +13,8 @@ import {
 import { useSelection } from "../context/SelectionContext.jsx";
 import { useRegionFullVillages } from "../lib/villagesStore.js";
 import { useRegionSites } from "../lib/sitesStore.js";
-import { SkeletonLoader, SkeletonCards, SkeletonBars } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
+import Icon from "../components/ui/Icon.jsx";
 
 /* ─── Chart color tokens (Section 5.1 + Section 8) ─── */
 const RISK_COLORS = {
@@ -210,15 +210,46 @@ export default function AnalyticsPage() {
         <div className="flex items-end justify-between border-b border-[#1E2330] pb-3 mb-6">
           <div>
             <h2 className="text-[20px] font-semibold text-phase-text">Analytics</h2>
-            <div className="h-4 w-64 bg-surface-container-high rounded-[2px] mt-2 animate-pulse" />
+            <p className="text-[13px] text-phase-text-secondary mt-1">Loading data…</p>
           </div>
         </div>
-        <SkeletonCards count={5} />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-          <div className="bg-phase-elevated rounded-[4px] border border-[#1E2330] p-5 h-[280px] animate-pulse" />
-          <div className="bg-phase-elevated rounded-[4px] border border-[#1E2330] p-5 h-[280px] animate-pulse" />
+
+        {/* Branded loader — spinning ring around the VYOMA mark + animated ellipsis */}
+        <div className="flex flex-col items-center justify-center py-10">
+          <div className="relative w-14 h-14 mb-4">
+            <div className="absolute inset-0 rounded-full border-2 border-[#1E2330] border-t-primary animate-spin" />
+            <div className="absolute inset-[7px] rounded-[9px] bg-primary flex items-center justify-center">
+              <Icon name="explore" className="text-surface-lowest font-bold text-[22px] icon-fill" />
+            </div>
+          </div>
+          <p className="text-[13px] text-phase-text font-medium">
+            Loading analytics data<span className="loading-dots" />
+          </p>
+          <p className="text-[11px] font-mono text-phase-text-secondary mt-1">
+            Fetching all 43,996 villages and 10,603 sites — the first load takes
+            a few seconds to a minute; repeat visits are instant.
+          </p>
         </div>
-        <div className="mt-8"><SkeletonBars count={4} /></div>
+
+        {/* Shimmer skeleton — mirrors the real layout so nothing looks blank */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="skeleton-shimmer h-20 rounded-[4px] border border-[#1E2330]" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {[0, 1].map((i) => (
+            <div key={i} className="skeleton-shimmer h-[280px] rounded-[4px] border border-[#1E2330] p-5">
+              <div className="h-4 w-40 bg-[#2A3040]/60 rounded-[2px] mb-2" />
+              <div className="h-3 w-56 bg-[#2A3040]/40 rounded-[2px] mb-6" />
+              <div className="h-[210px] bg-[#2A3040]/30 rounded-[2px]" />
+            </div>
+          ))}
+        </div>
+        <div className="skeleton-shimmer h-[320px] rounded-[4px] border border-[#1E2330] p-5 mb-8">
+          <div className="h-4 w-44 bg-[#2A3040]/60 rounded-[2px] mb-6" />
+          <div className="h-[250px] bg-[#2A3040]/30 rounded-[2px]" />
+        </div>
       </main>
     );
   }

@@ -15,6 +15,7 @@ import { useRegionFullVillages } from "../lib/villagesStore.js";
 import { useRegionSites } from "../lib/sitesStore.js";
 import ErrorState from "../components/ui/ErrorState.jsx";
 import Icon from "../components/ui/Icon.jsx";
+import BrandedLoader from "../components/ui/BrandedLoader.jsx";
 
 /* ─── Chart color tokens (Section 5.1 + Section 8) ─── */
 const RISK_COLORS = {
@@ -214,22 +215,12 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Branded loader — spinning ring around the VYOMA mark + animated ellipsis */}
-        <div className="flex flex-col items-center justify-center py-10">
-          <div className="relative w-14 h-14 mb-4">
-            <div className="absolute inset-0 rounded-full border-2 border-[#1E2330] border-t-primary animate-spin" />
-            <div className="absolute inset-[7px] rounded-[9px] bg-primary flex items-center justify-center">
-              <Icon name="explore" className="text-surface-lowest font-bold text-[22px] icon-fill" />
-            </div>
-          </div>
-          <p className="text-[13px] text-phase-text font-medium">
-            Loading analytics data<span className="loading-dots" />
-          </p>
-          <p className="text-[11px] font-mono text-phase-text-secondary mt-1">
-            Fetching all 43,996 villages and 10,603 sites — the first load takes
-            a few seconds to a minute; repeat visits are instant.
-          </p>
-        </div>
+        {/* Branded loader — shared with every village-data page so the loading
+            animation is identical app-wide (see BrandedLoader) */}
+        <BrandedLoader
+          title="Loading analytics data"
+          note="Fetching all 43,996 villages and 10,603 sites — the first load takes a few seconds to a minute; repeat visits are instant."
+        />
 
         {/* Shimmer skeleton — mirrors the real layout so nothing looks blank */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">

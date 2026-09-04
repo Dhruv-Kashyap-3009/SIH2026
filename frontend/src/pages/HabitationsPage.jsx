@@ -6,8 +6,8 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "../components/ui/Icon.jsx";
-import { SkeletonLoader } from "../components/ui/SkeletonLoader.jsx";
 import ErrorState from "../components/ui/ErrorState.jsx";
+import BrandedLoader from "../components/ui/BrandedLoader.jsx";
 import { useRegionCompactVillages } from "../lib/villagesStore.js";
 import { useSelection } from "../context/SelectionContext.jsx";
 
@@ -46,8 +46,11 @@ function FilterChip({ label, active, onClick, colorClass }) {
   );
 }
 
+// Shimmer skeleton row (matches the app-wide shimmer animation used by the
+// branded loaders — see .skeleton-shimmer in index.css).
+const CELL_WIDTHS = ["w-8", "w-40", "w-16", "w-16", "w-14", "w-24", "w-10"];
 function SkeletonRow() {
-  return (<tr className="border-b border-[#1E2330]">{Array.from({ length: 7 }).map((_, i) => <td key={i} className="px-4 py-3"><div className="h-4 bg-[#1A1E28] rounded-[2px] animate-pulse w-3/4" /></td>)}</tr>);
+  return (<tr className="border-b border-[#1E2330]">{Array.from({ length: 7 }).map((_, i) => <td key={i} className="px-4 py-3"><div className={`h-4 skeleton-shimmer rounded-[2px] ${CELL_WIDTHS[i]}`} /></td>)}</tr>);
 }
 
 export default function HabitationsPage() {
@@ -105,15 +108,22 @@ export default function HabitationsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-phase-text tracking-tight">Vulnerable Villages</h1>
             <p className="text-sm text-phase-text-secondary mt-1">
-              {selectedDistrict || selectedState || "All regions"} &mdash; {sorted.length} of {regionVillages.length} villages
+              {isLoading ? "Loading data…" : `${selectedDistrict || selectedState || "All regions"} — ${sorted.length} of ${regionVillages.length} villages`}
             </p>
           </div>
-          {hasActiveFilters && (
+          {!isLoading && hasActiveFilters && (
             <button onClick={clearFilters} className="flex items-center gap-1.5 px-3 py-1.5 rounded-[2px] border border-[#2A3040] text-phase-text-secondary text-[12px] font-mono hover:bg-phase-elevated transition-colors">
               <Icon name="filter_alt_off" className="text-[14px]" />Clear filters
             </button>
           )}
         </div>
+
+        {isLoading && (
+          <BrandedLoader
+            title="Loading villages data"
+            note="Fetching all 43,996 villages — the first load takes a few seconds to a minute; repeat visits are instant."
+          />
+        )}
 
         <div className="bg-phase-elevated rounded-[4px] border border-[#1E2330] p-4 mb-4">
           <div className="flex flex-wrap gap-6">

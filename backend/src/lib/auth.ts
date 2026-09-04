@@ -19,8 +19,28 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-const AUTH_SECRET =
-  process.env.AUTH_SECRET || "vyoma-demo-secret-change-in-production";
+/**
+ * Resolve the token-signing secret.
+ *
+ * Development falls back to a fixed demo secret (stable across restarts). In
+ * production (NODE_ENV=production) the secret is REQUIRED — the server refuses
+ * to start rather than silently signing tokens with a known public value.
+ * Generate one with:  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ */
+function resolveAuthSecret(): string {
+  const s = process.env.AUTH_SECRET;
+  if (s) return s;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AUTH_SECRET must be set in backend/.env in production — sign tokens with a unique random value " +
+        "(node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"). " +
+        "The dev-only fallback secret must never be used outside development."
+    );
+  }
+  return "vyoma-demo-secret-change-in-production";
+}
+
+const AUTH_SECRET = resolveAuthSecret();
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export interface AuthUserPayload {

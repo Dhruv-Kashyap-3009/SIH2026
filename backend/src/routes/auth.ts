@@ -12,6 +12,66 @@ import { signToken, verifyPassword, verifyToken } from "../lib/auth.js";
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// Login rate limiting (in-memory fixed window, per email+IP).
+//
+// Deliberately dependency-free: a Map of { attempts, windowStart } pruned lazily
+// on each request. Limits are env-overridable for tests:
+//   LOGIN_RATE_MAX_ATTEMPTS  (default 10)  attempts allowed per window
+//   LOGIN_RATE_WINDOW_MS     (default 15 min)
+// Note: state lives in this process only — fine for the single-instance demo;
+// a horizontally-scaled deployment needs a shared store (Redis/DB) instead.
+// ---------------------------------------------------------------------------
+interface RateEntry {
+  failures: number;
+  windowStart: number;
+}
+const loginFailures = new Map<string, RateEntry>();
+const RATE_MAX = parseInt(process.env.LOGIN_RATE_MAX_ATTEMPTS ?? "10", 10) || 10;
+const RATE_WINDOW_MS =
+  parseInt(process.env.LOGIN_RATE_WINDOW_MS ?? String(15 * 60_000), 10) ||
+  15 * 60_000;
+
+/** True when this key has exceeded the failure budget inside the window. */
+function isRateBlocked(key: string): boolean {
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry) return false;
+  if (now - entry.windowStart >= RATE_WINDOW_MS) {
+    loginFailures.delete(key); // window expired — clean slate
+    return false;
+  }
+  return entry.failures >= RATE_MAX;
+}
+
+/** Record one failed login (only failures count — successes never lock anyone out). */
+function recordRateFailure(key: string) {
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now - entry.windowStart >= RATE_WINDOW_MS) {
+    loginFailures.set(key, { failures: 1, windowStart: now });
+    return;
+  }
+  entry.failures += 1;
+}
+
+/** Seconds until a blocked key's window resets (for the Retry-After header). */
+function rateRetryAfterSec(key: string): number {
+  const entry = loginFailures.get(key);
+  if (!entry) return 0;
+  return Math.max(1, Math.ceil((entry.windowStart + RATE_WINDOW_MS - Date.now()) / 1000));
+}
+
+// Lazy prune so the map never grows without bound (entries also self-expire on
+// their next access).
+function pruneRateEntries() {
+  const now = Date.now();
+  for (const [k, v] of loginFailures) {
+    if (now - v.windowStart >= RATE_WINDOW_MS) loginFailures.delete(k);
+  }
+}
+
+
 function publicUser(u: { id: string; email: string; name: string; role: string }) {
   return { id: u.id, email: u.email, name: u.name, role: u.role };
 }
@@ -24,13 +84,29 @@ router.post("/login", async (req: Request, res: Response) => {
     return;
   }
 
+  const emailNorm = email.trim().toLowerCase();
+  // Rate limit per (email, client IP): cheap check BEFORE the scrypt work.
+  const rateKey = `${emailNorm}|${req.ip ?? "unknown"}`;
+  pruneRateEntries();
+  if (isRateBlocked(rateKey)) {
+    const retryAfterSec = rateRetryAfterSec(rateKey);
+    res.set("Retry-After", String(retryAfterSec));
+    res.status(429).json({
+      error: `Too many failed login attempts. Try again in ${Math.ceil(retryAfterSec / 60)} minute(s).`,
+    });
+    return;
+  }
+
   try {
-    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const user = await prisma.user.findUnique({ where: { email: emailNorm } });
     if (!user || !verifyPassword(password, user.passwordHash)) {
+      recordRateFailure(rateKey);
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
 
+    // Success — clear any accumulated failures for this key (clean slate).
+    loginFailures.delete(rateKey);
     res.json({
       token: signToken({ id: user.id, email: user.email, name: user.name, role: user.role }),
       user: publicUser(user),

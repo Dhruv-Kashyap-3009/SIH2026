@@ -2,6 +2,13 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — Review hardening: live Help stats, resilient sessions, login throttling (Sep 2026)
+
+- **Help page numbers are now live, never hand-maintained** (`frontend/src/pages/HelpPage.jsx`). The village/zone/site stat cards and the “current run” line read `GET /api/dashboard` via TanStack Query — after a model re-run (sync button) they update automatically. This removes the stale-hardcoded-number class of bug (the Sep-2 → Sep-4 drift) from the user guide.
+- **Sessions survive transient backend failures** (`frontend/src/context/AuthContext.jsx` + new `frontend/src/lib/session.js`). Previously ANY `/me` failure at startup — including the backend restarting or a cold DB — cleared the stored token and dumped the user on the login page. Now only a definitive **401** clears the session; network/server errors restore the user optimistically from the token payload (id/email/name/role, expiry-checked, signature-free by design — the API is public and `/me` remains the authority on the next successful reload). Verified live: with the backend stopped, a reload keeps the session and the user chip renders; with it back, `/me` re-confirms.
+- **Login rate limiting** (`backend/src/routes/auth.ts`). In-memory fixed-window limiter keyed by (email + client IP): only FAILED attempts count (a successful login never locks anyone out and clears accumulated failures), default 10 failures / 15 min → HTTP 429 with `Retry-After`; overridable via `LOGIN_RATE_MAX_ATTEMPTS` / `LOGIN_RATE_WINDOW_MS`. Documented as single-instance state.
+- **`AUTH_SECRET` is required in production** (`backend/src/lib/auth.ts`): with `NODE_ENV=production` and no secret set, the server refuses to start with a clear error. Development keeps the stable fallback secret. `.env.example` updated to mark the variable production-required.
+
 ## [Unreleased] — User login & logout activated (Sep 2026)
 
 - **Login/logout are now real.** Previously the Logout page was a placeholder and there was no auth anywhere. Now:

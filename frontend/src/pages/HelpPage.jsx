@@ -1,6 +1,30 @@
+import { useQuery } from "@tanstack/react-query";
 import Icon from "../components/ui/Icon.jsx";
+import { apiFetch } from "../lib/api.js";
+
+/** Localized thousand formatting (26,576). Returns "—" for missing values. */
+function fmt(n) {
+  return typeof n === "number" && Number.isFinite(n)
+    ? n.toLocaleString("en-IN")
+    : "—";
+}
 
 export default function HelpPage() {
+  // Live canonical numbers (never hand-edit these — they change on every model
+  // re-run; the sync button regenerates them). /api/dashboard is public.
+  const { data: dash } = useQuery({
+    queryKey: ["help", "dashboard-stats"],
+    queryFn: () => apiFetch("/api/dashboard"),
+    staleTime: 60_000,
+  });
+
+  const red = dash?.risk_level?.RED;
+  const orange = dash?.risk_level?.ORANGE;
+  const green = dash?.risk_level?.GREEN;
+  const riskSummary = dash
+    ? `${fmt(red)} / ${fmt(orange)} / ${fmt(green)}`
+    : "— / — / —";
+
   return (
     <main className="flex-1 overflow-y-auto bg-phase-bg p-6">
       <div className="max-w-[800px] mx-auto">
@@ -51,7 +75,7 @@ export default function HelpPage() {
               </li>
               <li className="flex items-start gap-2">
                 <Icon name="check_circle" className="text-[15px] text-phase-text-secondary shrink-0 mt-0.5" />
-                A <span className="font-mono text-phase-text">risk level</span> — RED / ORANGE / GREEN (current run: 26,576 / 6,049 / 11,371)
+                A <span className="font-mono text-phase-text">risk level</span> — RED / ORANGE / GREEN (current run: <span className="font-mono text-phase-text">{riskSummary}</span>)
               </li>
               <li className="flex items-start gap-2">
                 <Icon name="check_circle" className="text-[15px] text-phase-text-secondary shrink-0 mt-0.5" />
@@ -69,17 +93,21 @@ export default function HelpPage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-phase-card rounded-[4px] border border-[#1E2330] p-3 text-center">
                 <span className="text-[10px] text-phase-text-secondary uppercase tracking-wider font-mono block mb-1">Villages</span>
-                <span className="text-[16px] font-mono font-bold text-phase-text">43,996</span>
+                <span className="text-[16px] font-mono font-bold text-phase-text">{fmt(dash?.total_villages)}</span>
               </div>
               <div className="bg-phase-card rounded-[4px] border border-[#1E2330] p-3 text-center">
-                <span className="text-[10px] text-phase-text-secondary uppercase tracking-wider font-mono block mb-1">Risk Levels</span>
-                <span className="text-[16px] font-mono font-bold text-phase-text">3 tiers</span>
+                <span className="text-[10px] text-phase-text-secondary uppercase tracking-wider font-mono block mb-1">RED / ORANGE / GREEN</span>
+                <span className="text-[16px] font-mono font-bold text-phase-text">{riskSummary}</span>
               </div>
               <div className="bg-phase-card rounded-[4px] border border-[#1E2330] p-3 text-center">
                 <span className="text-[10px] text-phase-text-secondary uppercase tracking-wider font-mono block mb-1">Relocation Sites</span>
-                <span className="text-[16px] font-mono font-bold text-phase-text">10,603</span>
+                <span className="text-[16px] font-mono font-bold text-phase-text">{fmt(dash?.sites?.total)}</span>
               </div>
             </div>
+            <p className="text-[12px] text-phase-text-secondary mt-3 leading-relaxed">
+              Totals above are read live from the backend — they update
+              automatically whenever the model is re-run (top-bar sync button).
+            </p>
           </div>
 
           {/* Signing in */}

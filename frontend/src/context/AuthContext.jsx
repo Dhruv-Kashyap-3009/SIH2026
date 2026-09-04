@@ -3,7 +3,15 @@
  *
  * The token is a signed stateless token from POST /api/auth/login, kept in
  * localStorage under `vyoma_auth`. On startup the token is re-validated against
- * GET /api/auth/me (so a revoked/expired session bounces back to /login).
+ * GET /api/auth/me:
+ *   - /me answers 200            → session confirmed, user set.
+ *   - /me answers 401            → session is definitively invalid (revoked /
+ *                                 expired) — clear it and show the login page.
+ *   - /me fails on the NETWORK   → the backend may be restarting or the DB
+ *                                 cold; do NOT destroy the session. Restore the
+ *                                 user optimistically from the token payload so
+ *                                 the user isn't logged out by a blip. A later
+ *                                 page load re-validates against /me.
  *
  * Exposes: { user, token, initializing, login(email, password), logout() }
  */
@@ -15,10 +23,15 @@ import {
   useState,
 } from "react";
 import { API_BASE } from "../lib/api.js";
+import { decodeSessionToken } from "../lib/session.js";
 
 const STORAGE_KEY = "vyoma_auth";
 
 const AuthContext = createContext(null);
+
+function clearStoredSession() {
+  localStorage.removeItem(STORAGE_KEY);
+}
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY));
@@ -30,17 +43,47 @@ export function AuthProvider({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        if (!token) return;
-        const res = await fetch(`${API_BASE}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error("session invalid");
-        const data = await res.json();
-        if (!cancelled) setUser(data.user);
-      } catch {
-        if (!cancelled) {
-          // Stale/expired token — clear it so the guard sends us to /login.
-          localStorage.removeItem(STORAGE_KEY);
+        if (!token) {
+          setUser(null);
+          return;
+        }
+
+        let confirmedUser = null;
+        let definitiveInvalid = false;
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            confirmedUser = data.user ?? null;
+          } else if (res.status === 401) {
+            definitiveInvalid = true; // the backend says this token is no good
+          }
+          // Any other status (5xx) or a thrown network error → fall through to
+          // optimistic restore below — never punish the user for a blip.
+        } catch {
+          // fetch threw — backend unreachable; keep the token and restore
+          // optimistically (a later reload will confirm via /me).
+        }
+
+        if (cancelled) return;
+
+        if (definitiveInvalid) {
+          clearStoredSession();
+          setToken(null);
+          setUser(null);
+          return;
+        }
+
+        const restoredUser =
+          confirmedUser ?? decodeSessionToken(token);
+        if (restoredUser) {
+          setUser(restoredUser);
+        } else {
+          // Token present but undecodable/expired and /me unavailable — safest
+          // is to treat it as invalid rather than fabricate a session.
+          clearStoredSession();
           setToken(null);
           setUser(null);
         }
@@ -70,7 +113,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearStoredSession();
     setToken(null);
     setUser(null);
   }, []);

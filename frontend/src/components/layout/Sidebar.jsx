@@ -60,7 +60,7 @@ export default function Sidebar({ open, onClose }) {
             <Icon name="explore" className="text-surface-lowest font-bold text-lg icon-fill" />
           </div>
           <div className="flex-1">
-            <h1 className="font-headline-sm text-headline-sm font-black text-primary">VYOMA GIS</h1>
+            <h1 className="font-headline-sm text-headline-sm font-black text-primary">VYOMA</h1>
             <p className="font-label-sm text-label-sm text-on-surface-variant">Operational Suite</p>
           </div>
           {/* Close button — mobile only */}
@@ -82,7 +82,23 @@ export default function Sidebar({ open, onClose }) {
         {/* Footer items */}
         <div className="p-stack-sm border-t border-border-subtle flex flex-col gap-space-unit">
           {FOOTER_ITEMS.map((item) => (
-            <SidebarLink key={item.icon} icon={item.icon} label={item.label} to={item.to} onClick={onClose} />
+            <SidebarLink
+              key={item.icon}
+              icon={item.icon}
+              label={item.label}
+              to={item.to}
+              onClick={
+                item.to === "/logout"
+                  ? (e) => {
+                      // Ask before ending the session — abort navigation if declined.
+                      if (!window.confirm("Are you sure you want to log out?")) {
+                        e.preventDefault();
+                      }
+                      onClose();
+                    }
+                  : onClose
+              }
+            />
           ))}
         </div>
       </nav>

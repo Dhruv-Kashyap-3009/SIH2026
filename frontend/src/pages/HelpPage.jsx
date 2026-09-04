@@ -8,7 +8,7 @@ export default function HelpPage() {
           <div>
             <h2 className="text-[20px] font-semibold text-phase-text">Help</h2>
             <p className="text-[13px] text-phase-text-secondary mt-1">
-              VYOMA GIS Operational Suite — user guide
+              VYOMA Operational Suite — user guide
             </p>
           </div>
         </div>

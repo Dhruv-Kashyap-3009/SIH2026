@@ -52,3 +52,12 @@ model RelocationSite {
   @@index([district])
   @@index([state])
 }
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String // scrypt "salt:hash" — never store plaintext
+  role         String   @default("admin") // reserved for future RBAC
+  createdAt    DateTime @default(now())
+}

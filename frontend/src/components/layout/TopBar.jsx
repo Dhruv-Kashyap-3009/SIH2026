@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import Icon from "../ui/Icon.jsx";
 import { useSelection } from "../../context/SelectionContext.jsx";
 import { useRefresh } from "../../context/RefreshContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const REFRESH_CONFIRM =
   "Re-run the model now?\n\n" +
@@ -14,8 +15,16 @@ const REFRESH_CONFIRM =
   "It takes about 5-15 minutes — you can keep using the app meanwhile.\n\n" +
   "Continue?";
 
-const AVATAR_URL =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuC4mMRu-wg8rPgnmhYa2OXibt1A0SQy4OkTuDQS5OPE6079trdrcWSzOd4bE2PckNSgIxPxAjcOGU82esfqyw_EtPTYY30AizDP2SRdBjzVou67YVm54kUXZb8JJ5nxjBB2p2A9QMa0ZV0kRLIdVqbj6OxBgm81mEer6z8VlZAkQ5xYxw5FQstILmFc4Rx3LhtL-uDkn9fOIBkIxbedTmXX6MWS5u8WCSYSz4z_FOHto_lKrceKpEEyiQ";
+/** Initials chip fallback when the signed-in user has no avatar URL. */
+function initialsOf(name) {
+  return (name || "U")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
 
 function Dropdown({ label, value, options, onChange, placeholder, disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -91,6 +100,7 @@ export default function TopBar({ onMenuToggle }) {
     selectDistrict,
   } = useSelection();
   const { refreshing, refreshAll, refreshError, refreshStep } = useRefresh();
+  const { user } = useAuth();
 
   // Surface job failures (backend down, a pipeline step failed, …).
   useEffect(() => {
@@ -157,12 +167,14 @@ export default function TopBar({ onMenuToggle }) {
         <button className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-[4px] hover:bg-surface-variant">
           <Icon name="settings" />
         </button>
-        <div className="w-8 h-8 rounded-full bg-surface-container-high border border-border-subtle overflow-hidden ml-2 cursor-pointer">
-          <img
-            className="w-full h-full object-cover"
-            alt="User avatar"
-            src={AVATAR_URL}
-          />
+        {/* Signed-in user — initials chip (name/role in the tooltip) */}
+        <div
+          className="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-2 cursor-pointer select-none"
+          title={`${user?.name || "User"}${user?.email ? ` · ${user.email}` : ""}`}
+        >
+          <span className="text-surface-lowest font-label-sm text-label-sm font-bold">
+            {initialsOf(user?.name)}
+          </span>
         </div>
       </div>
     </header>

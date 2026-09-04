@@ -14,6 +14,7 @@ import villagesRouter from "./routes/villages.js";
 import sitesRouter from "./routes/sites.js";
 import dashboardRouter from "./routes/dashboard.js";
 import adminRouter from "./routes/admin.js";
+import authRouter from "./routes/auth.js";
 import {
   CACHE_MAX_AGE_SECONDS,
   CACHE_MAX_BODY_BYTES,
@@ -90,7 +91,8 @@ app.use((req, res, next) => {
   if (
     req.method !== "GET" ||
     req.originalUrl.startsWith("/api/health") ||
-    req.originalUrl.startsWith("/api/admin")
+    req.originalUrl.startsWith("/api/admin") ||
+    req.originalUrl.startsWith("/api/auth")
   ) {
     next();
     return;
@@ -135,6 +137,7 @@ app.use((req, res, next) => {
 app.use("/api/villages", villagesRouter);
 app.use("/api/sites", sitesRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/auth", authRouter); // POST /login · GET /me · POST /logout
 app.use("/api/admin", adminRouter); // POST /refresh — run the model refresh chain
 
 // Health check
@@ -154,6 +157,8 @@ app.listen(PORT, () => {
   console.log("    GET /api/villages/:id      — single village");
   console.log("    GET /api/sites             — list relocation sites");    console.log("    GET /api/sites/:id         — single site");
     console.log("    GET /api/dashboard         — aggregate stats");
+    console.log("    POST /api/auth/login       — sign in (email + password → token)");
+    console.log("    GET /api/auth/me          — validate stored session token");
     console.log("    GET /api/health            — health check");
     console.log("    POST /api/admin/refresh    — run the model refresh job");
     console.log("    GET /api/admin/refresh/status — job progress");

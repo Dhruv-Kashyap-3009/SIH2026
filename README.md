@@ -39,9 +39,10 @@ Needs **Node 18+** and a **PostgreSQL** database. A free [Neon](https://neon.tec
 cd backend
 npm install
 cp .env.example .env       # then paste your DATABASE_URL into backend/.env
-npx prisma db push         # create the Village + RelocationSite tables
+npx prisma db push         # create the Village + RelocationSite + User tables
 # Quick demo — seed the 830-village Mizoram fixture that ships in git:
 SEED_VILLAGES_FILE=vyoma_export_mizoram.json SEED_SITES_FILE=vyoma_sites_export_mizoram.json npm run seed
+npm run create-user admin@vyoma.in "admin123" "VYOMA Admin"      # create the demo login
 npm run dev
 
 # 2) Frontend — http://localhost:5173 (second terminal)
@@ -50,7 +51,7 @@ npm install
 npm run dev
 ```
 
-Verify: `curl http://localhost:3001/api/health` → `{"status":"ok"}`; open http://localhost:5173 — the dashboard shows zone counts for the seeded region, the map colors every village RED/ORANGE/GREEN, village detail pages show the relocation plan (destination, distance km, capacity fit), and the top-bar **sync** button re-pulls the latest data on demand (the header's `Predicted <date> · <version>` chip updates after a refresh).
+Verify: `curl http://localhost:3001/api/health` → `{"status":"ok"}`; open http://localhost:5173 — the app redirects to a **login screen**; sign in with the demo user you just created (**`admin@vyoma.in` / `admin123`**). The dashboard then shows zone counts for the seeded region, the map colors every village RED/ORANGE/GREEN, village detail pages show the relocation plan (destination, distance km, capacity fit), and the top-bar **sync** button re-pulls the latest data on demand (the header's `Predicted <date> · <version>` chip updates after a refresh). **Logout** (sidebar → Logout) clears the session and returns to the login screen; the **sidebar avatar chip** shows the signed-in user's initials.
 
 For the full 43,996-village dataset, generate the full exports first (Path B) and run `npm run seed` **without** the two `SEED_*` overrides.
 
@@ -210,6 +211,7 @@ cd backend && npm install
 cp .env.example .env                  # template — paste your real DATABASE_URL
 npx prisma db push                    # create the tables (no migration history needed)
 npm run seed                          # full 43,996 villages / 10,603 sites (full exports must exist)
+npm run create-user admin@vyoma.in "admin123" "VYOMA Admin"      # demo login (create more with any email/password)
 npm run dev                           # http://localhost:3001
 
 # 2) Frontend
@@ -224,6 +226,8 @@ SEED_VILLAGES_FILE=vyoma_export_mizoram.json SEED_SITES_FILE=vyoma_sites_export_
 ```
 
 > **Vocabulary note:** the model's CSVs use `relocation_timeline` values `SHORT_TERM` / `MEDIUM_TERM` / `MONITOR`, but the VYOMA kanban/dashboard hardcode `SHORT-TERM` / `MEDIUM-TERM` / `ROUTINE`. The seed maps the model vocabulary onto the UI vocabulary (`MONITOR → ROUTINE`, underscores → hyphens); the DB/API therefore speak the UI taxonomy while `prediction_output.csv` keeps the model's original strings.
+
+> **Login gate:** the frontend requires a session — unauthenticated visitors are redirected to `/login`, and every page behind the sidebar is guarded by `RequireAuth` (`frontend/src/App.jsx`). Tokens are signed by the backend (`backend/src/lib/auth.ts`, Node crypto only — no extra deps) and stored in the browser; the read API itself stays public by design (the data is public government data). Create/update users anytime with `npm run create-user <email> <password> [name]`.
 
 > **Scale notes (real 43,996-village data):** list/map pages fetch `?compact=1` (11 map/table fields ≈ 5 MB instead of ~40 MB of full rows) and the API supports `?limit=`/`?offset=` pagination on `/api/villages` and `/api/sites`. The State→District selector loads real Census district names from `GET /api/villages/districts?state=…` (never hardcoded), the dashboard header shows the real `predicted_at` + `model_version` from `/api/dashboard`, and kanban lanes / capacity cards are capped in the DOM at real scale.
 

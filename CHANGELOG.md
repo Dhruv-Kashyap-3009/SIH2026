@@ -2,6 +2,15 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — User login & logout activated (Sep 2026)
+
+- **Login/logout are now real.** Previously the Logout page was a placeholder and there was no auth anywhere. Now:
+  - **Backend** — new Prisma `User` model (`backend/prisma/schema.prisma`; table pushed to Postgres), `backend/src/lib/auth.ts` (scrypt password hashing + signed stateless session tokens — Node `crypto` only, **zero new npm dependencies**), and `backend/src/routes/auth.ts` exposing `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`. `/api/auth` is excluded from the GET response cache in `backend/src/index.ts`.
+  - **`npm run create-user <email> <password> [name] [role]`** (`backend/src/scripts/create-user.ts`) — standalone user creation that does NOT touch village/site data (no full re-seed needed). Demo user seeded: **admin@vyoma.in / admin123**.
+  - **Frontend** — new `frontend/src/pages/LoginPage.jsx` (full-screen sign-in outside the app shell), `frontend/src/context/AuthContext.jsx` (token in `localStorage` under `vyoma_auth`, re-validated against `/api/auth/me` on startup so expired/revoked sessions bounce to login), rewritten `LogoutPage` that clears the session and returns to `/login` with a “signed out” notice, and `frontend/src/App.jsx` now gates every page behind `RequireAuth` (loading screen while validating, redirect otherwise). The TopBar’s hardcoded remote avatar was replaced by the signed-in user’s initials chip.
+  - **Scope note:** auth gates the UI. The village/site read API remains public by design — the underlying data is public government data and the read endpoints are the performance-tuned Tier-1/2/3 path.
+  - Verified live: unauthenticated visit → `/login`; demo credentials → dashboard; sidebar Logout → session cleared + `/login` with signed-out banner; wrong password → 401. Backend `tsc --noEmit`, frontend `vite build`, and the full Python suite all pass.
+
 ## [Unreleased] — Stale-bundle fix: run-tagged bundles + latest.json discovery (Sep 2026)
 
 - **Fixed: the refresh button's new model run never reached browsers that had loaded the site before.** Root cause: the model-refresh job (`backend/src/lib/refreshJob.ts`) regenerated the Tier-3 static bundles **in place under the same filename** (`vyoma_compact_v1.1-susceptibility-2.json`). Browsers cache that URL with `Cache-Control: immutable` on first load, and an immutable entry is never revalidated — so after the re-run the dashboard chip still showed the OLD `Predicted Sep 2, 2026, 04:59 PM` even though the server, DB, and exports all carried the new Sep 4 data. The previous `BUILD_TAG` mechanism was designed for exactly this, but the refresh job could not bump it (the frontend pinned `STATIC_VERSION` in source, and nothing re-pinned it after a server-side refresh).

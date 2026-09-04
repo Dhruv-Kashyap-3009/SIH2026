@@ -99,7 +99,7 @@ function LowConfidenceBadge() {
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-[2px] bg-severity-amber/10 border border-severity-amber/30 mt-2">
       <Icon name="warning_amber" className="text-[14px] text-severity-amber shrink-0" />
-      <span className="text-[12px] font-mono text-severity-amber">Low confidence &mdash; limited training data</span>
+      <span className="text-[12px] font-mono text-severity-amber">Low confidence &mdash; partial source data (elevation / land cover estimated)</span>
     </div>
   );
 }

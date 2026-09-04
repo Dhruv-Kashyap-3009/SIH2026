@@ -222,7 +222,11 @@ def predict_all(model, features, df):
     # never contradict the zone displayed as risk_level. See
     # compute_relocation_timeline().
 
-    # Compute per-village SHAP top factors
+    # Compute per-village SHAP top factors (historical model's explanation).
+    # NOTE: callers that also run the susceptibility model overwrite this with
+    # the canonical susceptibility-model SHAP afterwards (see predict.py main()
+    # and refresh_predictions.py) so top_factors always explains the
+    # susceptibility risk_level/risk_score shown in the UI.
     df['top_factors'] = compute_top_factors(model, X, features, n_top=5)
 
     return df, X
@@ -464,6 +468,16 @@ def main():
     # zone or a top-quintile population-density area).
     if susc_model is not None and susc_features is not None:
         df = compute_relocation_timeline(df, 'susceptibility_score')
+
+        # ── Canonical top factors (susceptibility-model SHAP) ────────────────
+        # predict_all() above wrote top_factors from the *historical* model
+        # (66 features incl. the leaky distance/density columns). But
+        # risk_level / risk_score exposed to the frontend are the
+        # susceptibility model's, so the explanation must match the model
+        # being explained: overwrite top_factors with the susceptibility
+        # model's SHAP over its 59 leakage-free features.
+        df['top_factors'] = compute_top_factors(
+            susc_model, X_susc, susc_available, n_top=5)
 
     # ── Novel Red Zone Detection ──────────────────────────────────────────
     # A "novel" red zone is a village flagged RED by the susceptibility model

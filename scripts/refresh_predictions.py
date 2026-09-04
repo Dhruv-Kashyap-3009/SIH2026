@@ -123,6 +123,18 @@ def main():
         # areas).
         df_new = predict.compute_relocation_timeline(df_new, 'susceptibility_score')
 
+        # ── Canonical top factors (susceptibility-model SHAP) ──────────────
+        # predict_all() above wrote top_factors from the *historical* model
+        # (66 features incl. the leaky distance/density columns). But
+        # risk_level / risk_score exposed to the frontend are the
+        # susceptibility model's, so the explanation must match the model
+        # being explained: overwrite top_factors here with the susceptibility
+        # model's SHAP over its 59 leakage-free features.
+        print("  Computing canonical (susceptibility) SHAP top factors...")
+        df_new['top_factors'] = predict.compute_top_factors(
+            susc_model, X_susc, susc_features, n_top=5)
+        print("  ✅ Susceptibility top factors computed")
+
     # ── Novel red zone detection (re-derived from refreshed zones) ─────────
     if 'susceptibility_risk_zone' in df_new.columns:
         has_landslide = (df_new.get('gsi_landslide_zone',

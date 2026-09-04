@@ -2,6 +2,14 @@
 
 All notable changes to the NE India Hazard Red Zone Platform.
 
+## [Unreleased] — canonical (susceptibility) SHAP top factors + full docs (Sep 4, 2026)
+
+- **Bug — `top_factors` explained the WRONG model.** `predict_all()` wrote per-village `top_factors` from the HISTORICAL model (66 features incl. the leaky distance/density columns), and neither `predict.py`'s CLI nor `refresh_predictions.py` overwrote it after the susceptibility pass. Since the canonical `risk_level`/`risk_score` are the susceptibility model's, the village-detail page's "Top Contributing Factors" cited features (e.g. `dist_to_nearest_landslide_km`, `flood_density_100km`) that are not even inputs to the model being explained — same bug class as the earlier hazard-decomposition repoint.
+- **Fix:** both `predict.py` (main CLI) and `refresh_predictions.py` now overwrite `top_factors` with the **susceptibility model's SHAP** over its 59 leakage-free features after the canonical pass (comment added at the historical write site noting the overwrite). Verified: whole-dataset top-factors now contain **zero** leaky features (checked over a 20,000-village sample), e.g. Manikpur (16-291-1952-272533, Dhalai/Tripura, RED 0.9081) now explains via rainfall percentiles + elevation + school distance instead of landslide/flood proximity.
+- **Downstream re-run:** `refresh_predictions.py` (zones/timeline/novel counts unchanged — deterministic) → `generate_vyoma_export.py` (all states + Mizoram) → `generate_frontend_static.py` (new run-tagged bundles, `predicted_at` 2026-09-04T13:50Z) → `npm run seed`; backend restarted. Relocation plan/sites untouched (they don't read `top_factors`).
+- **Docs:** added `architecture.md`, `design.md`, `documentation.md` (detailed, current numbers; previously they existed only as stray files outside the repo) and linked them from `README.md` (companion-docs block + project-structure tree).
+- **Tests:** full suite green after the change — `test_pipeline.py` 293/293 (new TEST 16 locks top_factors to the 59-feature susceptibility set and bans the 7 leaky distance/density features from the column, full 43,996-row scan) · `test_readme_consistency.py` 7/7 · `validate_vyoma_export.py` PASSED · `behavioral_vyoma.py` 41/41 · `validate_predictions.py` exit 0 · `validate_real_world.py` 35/38 (same 3 pre-existing, documented warnings).
+
 ## [Unreleased] — relocation_timeline aligned to the canonical zones (Sep 2026)
 
 - **Follow-up to the 0.9-zone-cutoff change:** previously `relocation_timeline` was derived from the HISTORICAL model's `risk_score` with its own 0.7/0.55 thresholds, so after the zone RED cutoff moved to 0.9 a village could be shown ORANGE/GREEN (`susceptibility_risk_zone`, the displayed `risk_level`) yet flagged SHORT_TERM or IMMEDIATE priority. The tier contradicted the zone.

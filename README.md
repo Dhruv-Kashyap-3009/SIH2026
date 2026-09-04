@@ -6,6 +6,12 @@
 
 An AI-driven GIS platform that predicts hazard-based Red Zones across 7 North-Eastern Indian states, identifies safe Green Zones for relocation, assesses carrying capacity, and prioritizes 44,000+ vulnerable villages for immediate action.
 
+> **📚 Companion documentation** — this README is the quick start. For the full picture:
+> - [`architecture.md`](architecture.md) — how the system is built, every layer, end-to-end data flows
+> - [`design.md`](design.md) — *why* each decision was made (two-model design, spatial CV, thresholds, assumptions)
+> - [`documentation.md`](documentation.md) — how to run and operate *everything* (model pipeline **and** web app)
+> - [`CHANGELOG.md`](CHANGELOG.md) — dated history of every change
+
 ---
 
 ## 🚀 Download and Run
@@ -17,7 +23,7 @@ git clone https://github.com/Dhruv-Kashyap-3009/SIH2026.git
 cd SIH2026
 ```
 
-**What ships in the repo (tracked in git):** the full pipeline + all tests (`scripts/`, `tests/`), the complete VYOMA web app (`frontend/` + `backend/`), model-diagnostic CSVs (`models/*.csv`), methodology docs (`README.md`, `CHANGELOG.md`, `data/processed/*_assumptions.json`), and a small **Mizoram demo fixture** (`data/processed/vyoma_export_mizoram.json` + `vyoma_sites_export_mizoram.json` — 830 villages / 32 sites).
+**What ships in the repo (tracked in git):** the full pipeline + all tests (`scripts/`, `tests/`), the complete VYOMA web app (`frontend/` + `backend/`), model-diagnostic CSVs (`models/*.csv`), methodology docs (`README.md`, `architecture.md`, `design.md`, `documentation.md`, `CHANGELOG.md`, `data/processed/*_assumptions.json`), and a small **Mizoram demo fixture** (`data/processed/vyoma_export_mizoram.json` + `vyoma_sites_export_mizoram.json` — 830 villages / 32 sites).
 
 **What is intentionally NOT in the repo** (gitignored — too large or machine-specific, and reproducible by the scripts):
 
@@ -73,7 +79,7 @@ Needs **Python 3.10+** (`pip install -r requirements.txt`), **Node 18+** (only i
 Run the test suite at any time (all paths are verified against it):
 
 ```bash
-python tests/test_pipeline.py            # 290 regression assertions
+python tests/test_pipeline.py            # 293 regression assertions
 python tests/behavioral_vyoma.py         # 41 end-to-end export checks
 python tests/validate_vyoma_export.py    # 22 schema-contract checks
 python tests/test_readme_consistency.py  # 7 README-vs-data consistency checks
@@ -681,7 +687,10 @@ python scripts/relocation_planner.py --radius 30
 
 ```
 SIH2026/
-├── README.md                           # This file
+├── README.md                           # This file — quick start + headline results
+├── architecture.md                     # System architecture: layers, data flows, config, ports
+├── design.md                           # Design decisions & rationale (thresholds, CV, assumptions)
+├── documentation.md                    # Full operations manual: model pipeline + web app
 ├── CHANGELOG.md                        # Change log with bug fixes & decisions
 ├── requirements.txt                    # Python deps (pip install -r requirements.txt)
 ├── .gitignore                          # Excludes raw data (~5.6 GB), model weights, .env
@@ -747,7 +756,7 @@ SIH2026/
 │   └── susceptibility_cv.png           # Spatial CV comparison plot
 │
 ├── tests/                              # End-to-end validation
-│   ├── test_pipeline.py                # 290 regression assertions (18 categories)
+│   ├── test_pipeline.py                # 293 regression assertions (18 categories)
 │   ├── behavioral_vyoma.py             # 41 end-to-end VYOMA export checks
 │   ├── validate_vyoma_export.py        # 22 schema-contract checks (18-field contract)
 │   ├── test_readme_consistency.py      # 7 README-vs-data consistency checks
@@ -797,7 +806,7 @@ Counts below are from the last full green run (Sep 2026) against the current dat
 
 | Test file | What it verifies | Checks | Status |
 |---|---|---|---|
-| `tests/test_pipeline.py` | Regression suite across 18 categories: data integrity, labels & tie-breaks, spatial/CV consistency, model artifacts, prediction-output schema, and the Phase 1-5 modules (susceptibility, carrying capacity, relocation planner, social vulnerability, hazard decomposition), slope fix, threshold logic, calibration & uncertainty bounds | 290 | ✅ 290/290 |
+| `tests/test_pipeline.py` | Regression suite across 18 categories: data integrity, labels & tie-breaks, spatial/CV consistency, model artifacts, prediction-output schema, and the Phase 1-5 modules (susceptibility, carrying capacity, relocation planner, social vulnerability, hazard decomposition), slope fix, threshold logic, calibration & uncertainty bounds, canonical (leakage-free) top_factors | 293 | ✅ 293/293 |
 | `tests/behavioral_vyoma.py` | End-to-end export lifecycle: idempotent script re-runs, canonical susceptibility mapping, zone purity, capacity bookkeeping, relocation-plan traceability, schema contracts | 41 | ✅ 41/41 |
 | `tests/validate_vyoma_export.py` | VYOMA ingestion contract: exact field set (18 fields incl. the relocation distance/fit extensions), value types, ISO timestamps, vocabularies, dangling site references, relocation-field coherence | 22 | ✅ PASS |
 | `tests/test_readme_consistency.py` | README headline numbers vs actual pipeline output (zone distribution, per-state RED sums, priorities, hazard actions, capacity candidates) | 7 | ✅ 7/7 |

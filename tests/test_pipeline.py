@@ -1171,6 +1171,60 @@ def main():
         traceback.print_exc()
         FAIL += 1
 
+    # ── TEST 16: top_factors explain the canonical (susceptibility) model ──
+    print("\n=== TEST 16: Canonical top_factors (leakage-free SHAP) ===")
+    try:
+        pred_path = 'data/processed/prediction_output.csv'
+        if not os.path.exists(pred_path):
+            raise FileNotFoundError(pred_path)
+        df_pred = pd.read_csv(pred_path, low_memory=False)
+        if 'top_factors' not in df_pred.columns:
+            raise KeyError("top_factors column missing")
+
+        # The 7 leaky distance/density features (historical model only) must
+        # NEVER appear in top_factors, which now explain the canonical
+        # susceptibility risk_level/risk_score (see refresh_predictions.py).
+        LEAKY = {'dist_to_nearest_landslide_km', 'landslide_density_50km',
+                 'landslide_density_100km', 'dist_to_nearest_flood_km',
+                 'flood_density_50km', 'flood_density_100km', 'flood_proxy_score'}
+        susc_feat_path = 'models/susceptibility_features.json'
+        with open(susc_feat_path) as f:
+            susc_features = set(json.load(f))
+
+        parsed = 0
+        leaky_hits = set()
+        foreign = set()  # features not in the 59-feature susceptibility set
+        for s in df_pred['top_factors'].dropna():
+            try:
+                factors = json.loads(s)
+            except (ValueError, TypeError):
+                continue
+            parsed += 1
+            for t in factors:
+                feat = t.get('feature')
+                if feat in LEAKY:
+                    leaky_hits.add(feat)
+                if feat not in susc_features:
+                    foreign.add(feat)
+
+        parsed_pct = parsed / len(df_pred) * 100
+        assert parsed_pct >= 99, f"Only {parsed_pct:.1f}% top_factors parseable"
+        PASS += 1
+        print(f"  ✅ top_factors parseable for {parsed_pct:.1f}% of villages")
+
+        assert not leaky_hits, f"Leaky features in top_factors: {sorted(leaky_hits)}"
+        PASS += 1
+        print("  ✅ Zero leaky distance/density features in top_factors")
+
+        assert not foreign, f"Non-susceptibility features in top_factors: {sorted(foreign)[:8]}"
+        PASS += 1
+        print("  ✅ Every top_factor belongs to the 59-feature susceptibility set")
+
+    except Exception as e:
+        ERRORS.append(f"TEST 16: {e}")
+        traceback.print_exc()
+        FAIL += 1
+
     # Summary
     total = PASS + FAIL
     print("\n" + "=" * 70)

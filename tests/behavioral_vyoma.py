@@ -91,9 +91,9 @@ def main():
     check("vulnerability_multiplier equals vulnerability_score",
           np.allclose(vdf['vulnerability_multiplier'], vdf['village_id'].map(
               lambda h: hid2.loc[h, 'vulnerability_score']), atol=1e-4))
-    check("Mizoram zone mix = 804 RED / 25 ORANGE / 1 GREEN",
+    check("Mizoram zone mix = 613 RED / 216 ORANGE / 1 GREEN",
           vdf['risk_level'].value_counts().to_dict() ==
-          {'RED': 804, 'ORANGE': 25, 'GREEN': 1},
+          {'RED': 613, 'ORANGE': 216, 'GREEN': 1},
           str(vdf['risk_level'].value_counts().to_dict()))
     check("types: numbers not strings, booleans not strings, ISO timestamps",
           all(isinstance(x, (int, float)) for x in vdf['risk_score']) and
@@ -226,8 +226,8 @@ def main():
     check("all assigned green targets are real capacity candidates",
           green_ids.isin(cc['Village Code']).all())
     assigned_frac = (plan['feasibility_flag'] == 'assigned').mean()
-    check("8,701/29,687 assigned (29.3%)",
-          abs(assigned_frac - 0.2931) < 0.002, assigned_frac)
+    check("8,431/29,105 assigned (29.0%)",
+          abs(assigned_frac - 0.2897) < 0.002, assigned_frac)
     # Canonical-safety: every assigned target must itself be canonical GREEN
     tgt_zone = (cc.merge(pred[['Village Code', 'susceptibility_risk_zone']],
                          on='Village Code', how='left')
@@ -249,10 +249,10 @@ def main():
     all_ids = [x['village_id'] for x in allv]
     check("village_id unique in full export", len(set(all_ids)) == 43996)
     check("full export zones sum to susceptibility totals "
-          "(RED 26,576 / ORANGE 6,049 / GREEN 11,371)",
+          "(RED 20,129 / ORANGE 12,496 / GREEN 11,371)",
           {k: sum(1 for x in allv if x['risk_level'] == k)
            for k in ('RED', 'ORANGE', 'GREEN')} ==
-          {'RED': 26576, 'ORANGE': 6049, 'GREEN': 11371})
+          {'RED': 20129, 'ORANGE': 12496, 'GREEN': 11371})
 
     # ── Summary ─────────────────────────────────────────────────────────────
     print("\n" + "=" * 70)

@@ -104,11 +104,24 @@ def main():
         X_susc = X_susc.fillna(X_susc.median())
         susc_probs = susc_model.predict_proba(X_susc)[:, 1]
         df_new['susceptibility_score'] = susc_probs
+        # Canonical zone thresholds (must match predict.py / train_model.py):
+        # GREEN < 0.4, ORANGE 0.4-0.9, RED >= 0.9 — RED cutoff raised from 0.7
+        # on user request so only the most extreme scores are RED.
         df_new['susceptibility_risk_zone'] = 'GREEN'
-        df_new.loc[susc_probs >= 0.7, 'susceptibility_risk_zone'] = 'RED'
-        df_new.loc[(susc_probs >= 0.4) & (susc_probs < 0.7),
+        df_new.loc[susc_probs >= 0.9, 'susceptibility_risk_zone'] = 'RED'
+        df_new.loc[(susc_probs >= 0.4) & (susc_probs < 0.9),
                    'susceptibility_risk_zone'] = 'ORANGE'
         print("  ✅ Susceptibility predictions complete")
+
+        # ── Relocation timeline (zone-aligned, canonical) ──────────────────
+        # Recompute from the susceptibility score with the same 0.9/0.4
+        # cutoffs as susceptibility_risk_zone (predict.py no longer derives it
+        # from the historical risk_score inside predict_all), so the tier shown
+        # as relocation_priority can never contradict the zone shown as
+        # risk_level: GREEN -> MONITOR, ORANGE -> MEDIUM_TERM, RED ->
+        # SHORT_TERM / IMMEDIATE (IMMEDIATE only in disaster/high-density
+        # areas).
+        df_new = predict.compute_relocation_timeline(df_new, 'susceptibility_score')
 
     # ── Novel red zone detection (re-derived from refreshed zones) ─────────
     if 'susceptibility_risk_zone' in df_new.columns:

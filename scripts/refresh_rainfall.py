@@ -138,10 +138,11 @@ def refresh(input_csv=None, demo=False):
     df.loc[~affected_mask, 'risk_score'] = old_risk_scores[~affected_mask]
     df.loc[~affected_mask, 'model_risk_score'] = old_risk_scores[~affected_mask]
 
-    # Update zones
+    # Update zones (canonical thresholds: GREEN<0.4, ORANGE 0.4-0.9, RED>=0.9
+    # — RED cutoff raised 0.7 -> 0.9 on user request; must match predict.py)
     df['predicted_risk_zone'] = 'GREEN'
-    df.loc[df['risk_score'] >= 0.7, 'predicted_risk_zone'] = 'RED'
-    df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.7), 'predicted_risk_zone'] = 'ORANGE'
+    df.loc[df['risk_score'] >= 0.9, 'predicted_risk_zone'] = 'RED'
+    df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.9), 'predicted_risk_zone'] = 'ORANGE'
 
     # Update relocation timeline
     in_disaster = (df.get('gsi_landslide_zone', 0) == 1) | (df.get('emdat_disaster_zone', 0) == 1)
@@ -158,11 +159,15 @@ def refresh(input_csv=None, demo=False):
     else:
         high_density = False
 
+    # Demo path: this script re-scores with the HISTORICAL model only, so its
+    # zones AND timeline are both derived from risk_score with the canonical
+    # 0.9/0.4 cutoffs (kept mutually consistent here). After a real rainfall
+    # refresh, re-run scripts/refresh_predictions.py + the export chain so the
+    # canonical susceptibility-based timeline is restored.
     df['relocation_timeline'] = 'MONITOR'
-    df.loc[(df['risk_score'] >= 0.7) & ~(in_disaster | high_density), 'relocation_timeline'] = 'SHORT_TERM'
-    df.loc[(df['risk_score'] >= 0.55) & (df['risk_score'] < 0.7), 'relocation_timeline'] = 'MEDIUM_TERM'
-    df.loc[(df['risk_score'] >= 0.85) & (in_disaster | high_density), 'relocation_timeline'] = 'IMMEDIATE'
-    df.loc[(df['risk_score'] >= 0.7) & (df['risk_score'] < 0.85) & (in_disaster | high_density), 'relocation_timeline'] = 'IMMEDIATE'
+    df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.9), 'relocation_timeline'] = 'MEDIUM_TERM'
+    df.loc[(df['risk_score'] >= 0.9) & ~(in_disaster | high_density), 'relocation_timeline'] = 'SHORT_TERM'
+    df.loc[(df['risk_score'] >= 0.9) & (in_disaster | high_density), 'relocation_timeline'] = 'IMMEDIATE'
 
     # Add timestamp
     df['predicted_at'] = datetime.now(timezone.utc).isoformat()

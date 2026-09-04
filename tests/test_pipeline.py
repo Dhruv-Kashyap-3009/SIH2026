@@ -732,23 +732,36 @@ def test_relocation_timeline():
         count = (df['relocation_timeline'] == tier).sum()
         assert_test(f"{tier} is not empty (got {count})", count > 0)
     
-    # IMMEDIATE ⊆ RED zone (all IMMEDIATE villages must be RED or high-ORANGE)
+    # Tier ↔ canonical-zone alignment: relocation_timeline is derived from the
+    # canonical susceptibility_score with the SAME cutoffs as the zones (RED >= 0.9
+    # / ORANGE 0.4-0.9 / GREEN < 0.4 — see compute_relocation_timeline in
+    # predict.py), so the tier shown as relocation_priority can never contradict
+    # the zone shown as risk_level:
+    #   GREEN -> MONITOR | ORANGE -> MEDIUM_TERM | RED -> SHORT_TERM or IMMEDIATE
+    z = df['susceptibility_risk_zone']
+    tl = df['relocation_timeline']
     imm = df[df['relocation_timeline'] == 'IMMEDIATE']
-    imm_in_red_or_high_orange = imm[
-        (imm['risk_zone'] == 'RED') | 
-        ((imm['risk_zone'] == 'ORANGE') & (imm['risk_score'] >= 0.7))
-    ]
-    pct = len(imm_in_red_or_high_orange) / len(imm) * 100 if len(imm) > 0 else 0
-    assert_test(f"IMMEDIATE ⊆ RED/high-ORANGE ({pct:.0f}%)", pct >= 95)
-    
-    # SHORT_TERM villages have risk_score >= 0.7
     short = df[df['relocation_timeline'] == 'SHORT_TERM']
-    assert_test(f"SHORT_TERM villages have score >= 0.7 (min={short['risk_score'].min():.3f})",
-                 short['risk_score'].min() >= 0.65)  # small tolerance
-    
-    # IMMEDIATE villages have risk_score >= 0.7
-    assert_test(f"IMMEDIATE villages have score >= 0.7 (min={imm['risk_score'].min():.3f})",
-                 imm['risk_score'].min() >= 0.65)
+
+    assert_test("IMMEDIATE ⊆ canonical RED zone",
+                z[tl == 'IMMEDIATE'].eq('RED').all())
+    assert_test("SHORT_TERM ⊆ canonical RED zone",
+                z[tl == 'SHORT_TERM'].eq('RED').all())
+    assert_test("every RED-zone village is SHORT_TERM or IMMEDIATE",
+                tl[z == 'RED'].isin(['SHORT_TERM', 'IMMEDIATE']).all())
+    assert_test("no ORANGE-zone village flagged SHORT_TERM/IMMEDIATE",
+                ~tl[z == 'ORANGE'].isin(['SHORT_TERM', 'IMMEDIATE']).any())
+    assert_test("ORANGE-zone villages are all MEDIUM_TERM",
+                tl[z == 'ORANGE'].eq('MEDIUM_TERM').all())
+    assert_test("GREEN-zone villages are all MONITOR",
+                tl[z == 'GREEN'].eq('MONITOR').all())
+    # Urgency ordering within RED: both urgent tiers sit on the canonical score
+    assert_test(f"IMMEDIATE villages have susceptibility_score >= 0.9 "
+                f"(min={imm['susceptibility_score'].min():.3f})",
+                imm['susceptibility_score'].min() >= 0.85)
+    assert_test(f"SHORT_TERM villages have susceptibility_score >= 0.9 "
+                f"(min={short['susceptibility_score'].min():.3f})",
+                short['susceptibility_score'].min() >= 0.85)
 
 
 def test_relocation_matching():

@@ -114,6 +114,46 @@ def add_low_confidence(df):
 
 # ─── Compute per-village SHAP top factors ───────────────────────────────────
 
+def compute_relocation_timeline(df, score_col='susceptibility_score'):
+    """Zone-aligned relocation tiers, derived from `score_col` (canonical
+    susceptibility score by default) using the SAME cutoffs as the zones, so a
+    village is never flagged SHORT_TERM/IMMEDIATE while its displayed zone
+    (risk_level) is ORANGE:
+
+        score < 0.4    (GREEN)   -> MONITOR       routine monitoring
+        0.4 <= s < 0.9 (ORANGE)  -> MEDIUM_TERM   moderate risk, plan ahead
+        s >= 0.9 (RED), not below -> SHORT_TERM   relocate within 1-2 years
+        s >= 0.9 AND (documented disaster zone OR top-quintile population
+                      density)                     -> IMMEDIATE  relocate first
+
+    `score_col` must exist on df (callers invoke this after the susceptibility
+    model has run and filled susceptibility_score). Mutates df in place.
+    """
+    s = pd.to_numeric(df[score_col], errors='coerce')
+    in_disaster = ((df.get('gsi_landslide_zone', 0) == 1) |
+                   (df.get('emdat_disaster_zone', 0) == 1))
+    pop_col = 'Total Population of Village'
+    if pop_col in df.columns:
+        pop = df[pop_col].fillna(0)
+        area_col = 'Total Geographical Area (in Hectares)'
+        if area_col in df.columns:
+            area = df[area_col].replace(0, 1).fillna(1)
+            density = pop / area
+            high_density = density > density.quantile(0.8)
+        else:
+            high_density = pop > pop.quantile(0.8)
+    else:
+        high_density = False
+
+    df['relocation_timeline'] = 'MONITOR'
+    df.loc[(s >= 0.4) & (s < 0.9), 'relocation_timeline'] = 'MEDIUM_TERM'
+    df.loc[(s >= 0.9) & ~(in_disaster | high_density),
+           'relocation_timeline'] = 'SHORT_TERM'
+    df.loc[(s >= 0.9) & (in_disaster | high_density),
+           'relocation_timeline'] = 'IMMEDIATE'
+    return df
+
+
 def compute_top_factors(model, X, features, n_top=5):
     """Compute per-village top SHAP contributors and return as a list of JSON strings."""
     print("    Computing per-village SHAP values...")
@@ -169,42 +209,18 @@ def predict_all(model, features, df):
     df['risk_score'] = risk_probabilities  # alias for frontend
 
     # Assign risk zone — must match train_model.py thresholds exactly
-    # train_model.py: GREEN<0.4, ORANGE 0.4-0.7, RED>=0.7
+    # train_model.py: GREEN<0.4, ORANGE 0.4-0.9, RED>=0.9
+    # (RED cutoff raised 0.7 -> 0.9 on user request: only the most extreme
+    #  hazard scores qualify as RED; the ORANGE band widens to 0.4-0.9.)
     df['predicted_risk_zone'] = 'GREEN'
-    df.loc[df['risk_score'] >= 0.7, 'predicted_risk_zone'] = 'RED'
-    df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.7), 'predicted_risk_zone'] = 'ORANGE'
+    df.loc[df['risk_score'] >= 0.9, 'predicted_risk_zone'] = 'RED'
+    df.loc[(df['risk_score'] >= 0.4) & (df['risk_score'] < 0.9), 'predicted_risk_zone'] = 'ORANGE'
 
-    # ── Relocation Timeline (PS-aligned tiers) ──────────────────────────────
-    # IMMEDIATE: risk_score >= 0.85 AND (in disaster zone OR high density)
-    # SHORT_TERM: risk_score >= 0.7 but not IMMEDIATE
-    # MEDIUM_TERM: ORANGE zone with score 0.55-0.7
-    in_disaster = (df.get('gsi_landslide_zone', 0) == 1) | (df.get('emdat_disaster_zone', 0) == 1)
-    pop_col = 'Total Population of Village'
-    if pop_col in df.columns:
-        pop = df[pop_col].fillna(0)
-        area_col = 'Total Geographical Area (in Hectares)'
-        if area_col in df.columns:
-            area = df[area_col].replace(0, 1).fillna(1)
-            density = pop / area
-            high_density = density > density.quantile(0.8)
-        else:
-            high_density = pop > pop.quantile(0.8)
-    else:
-        high_density = False
-
-    df['relocation_timeline'] = 'MONITOR'
-    df.loc[
-        (df['risk_score'] >= 0.7) & ~(in_disaster | high_density),
-        'relocation_timeline'] = 'SHORT_TERM'
-    df.loc[
-        (df['risk_score'] >= 0.55) & (df['risk_score'] < 0.7),
-        'relocation_timeline'] = 'MEDIUM_TERM'
-    df.loc[
-        (df['risk_score'] >= 0.85) & (in_disaster | high_density),
-        'relocation_timeline'] = 'IMMEDIATE'
-    df.loc[
-        (df['risk_score'] >= 0.7) & (df['risk_score'] < 0.85) & (in_disaster | high_density),
-        'relocation_timeline'] = 'IMMEDIATE'
+    # NOTE: relocation_timeline is NOT computed here — it is derived from the
+    # canonical susceptibility score (which is only available after the
+    # susceptibility model runs, downstream in the callers) so the tier can
+    # never contradict the zone displayed as risk_level. See
+    # compute_relocation_timeline().
 
     # Compute per-village SHAP top factors
     df['top_factors'] = compute_top_factors(model, X, features, n_top=5)
@@ -333,11 +349,11 @@ def predict_village(model, features, df, village_name):
         X_row = row[features].fillna(global_medians).values.reshape(1, -1).astype(float)
 
         prob = model.predict_proba(X_row)[0][1]
-        # Thresholds must match train_model.py: GREEN<0.4, ORANGE 0.4-0.7, RED>=0.7
-        zone = 'RED' if prob >= 0.7 else 'ORANGE' if prob >= 0.4 else 'GREEN'
+        # Thresholds must match train_model.py: GREEN<0.4, ORANGE 0.4-0.9, RED>=0.9
+        zone = 'RED' if prob >= 0.9 else 'ORANGE' if prob >= 0.4 else 'GREEN'
 
         print(f"\n  🎯 PREDICTION:")
-        emoji = '🔴' if prob >= 0.7 else '🟠' if prob >= 0.4 else '🟢'
+        emoji = '🔴' if prob >= 0.9 else '🟠' if prob >= 0.4 else '🟢'
         print(f"    Risk Score: {prob:.3f} {emoji}")
         print(f"    Risk Zone:  {zone}")
 
@@ -349,7 +365,7 @@ def predict_village(model, features, df, village_name):
                 arrow = '↑' if f['shap_value'] > 0 else '↓'
                 print(f"    {arrow} {f['feature']}: {f['value']} ({f['impact']})")
 
-        if prob >= 0.7:
+        if prob >= 0.9:
             print(f"\n    ⚠️  HIGH RISK — Immediate relocation recommended")
         elif prob >= 0.4:
             print(f"\n    ⚠️  MEDIUM RISK — Monitor and plan")
@@ -429,8 +445,8 @@ def main():
         susc_probs = susc_model.predict_proba(X_susc)[:, 1]
         df['susceptibility_score'] = susc_probs
         df['susceptibility_risk_zone'] = 'GREEN'
-        df.loc[susc_probs >= 0.7, 'susceptibility_risk_zone'] = 'RED'
-        df.loc[(susc_probs >= 0.4) & (susc_probs < 0.7), 'susceptibility_risk_zone'] = 'ORANGE'
+        df.loc[susc_probs >= 0.9, 'susceptibility_risk_zone'] = 'RED'
+        df.loc[(susc_probs >= 0.4) & (susc_probs < 0.9), 'susceptibility_risk_zone'] = 'ORANGE'
         susc_red = (df['susceptibility_risk_zone'] == 'RED').sum()
         print(f"  ✅ Susceptibility: RED={susc_red:,}, "
               f"ORANGE={(df['susceptibility_risk_zone']=='ORANGE').sum():,}, "
@@ -438,6 +454,16 @@ def main():
     else:
         df['susceptibility_score'] = None
         df['susceptibility_risk_zone'] = None
+
+    # ── Relocation Timeline (zone-aligned tiers) ────────────────────────────
+    # Derived from the CANONICAL susceptibility score with the same cutoffs as
+    # susceptibility_risk_zone (RED >= 0.9 / ORANGE 0.4-0.9 / GREEN < 0.4) so
+    # the tier shown as relocation_priority can never contradict the zone shown
+    # as risk_level: GREEN -> MONITOR, ORANGE -> MEDIUM_TERM, RED ->
+    # SHORT_TERM / IMMEDIATE (IMMEDIATE only when in a documented disaster
+    # zone or a top-quintile population-density area).
+    if susc_model is not None and susc_features is not None:
+        df = compute_relocation_timeline(df, 'susceptibility_score')
 
     # ── Novel Red Zone Detection ──────────────────────────────────────────
     # A "novel" red zone is a village flagged RED by the susceptibility model

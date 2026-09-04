@@ -21,10 +21,10 @@ def test_readme_consistency():
     orange = int(pred.get('ORANGE', 0))
     green = int(pred.get('GREEN', 0))
 
-    # README claims (updated to susceptibility distribution — current-model run
-    # of 2026-09-04, which re-predicted with the LOSO-tuned model that had been
-    # retrained after the previous Sep-2 export)
-    readme_red, readme_orange, readme_green = 26576, 6049, 11371
+    # README claims (canonical susceptibility thresholds RED>=0.9, ORANGE
+    # 0.4-0.9, GREEN<0.4 — RED cutoff raised from 0.7 on 2026-09-04 so only the
+    # most extreme scores are RED)
+    readme_red, readme_orange, readme_green = 20129, 12496, 11371
 
     print(f"Susceptibility headline: RED={red} ORANGE={orange} GREEN={green} TOTAL={total}")
     if red != readme_red:
@@ -68,13 +68,13 @@ def test_readme_consistency():
 
     # ── TEST 3: README per-state numbers match (susceptibility model) ──
     readme_states = {
-        'Assam': (25854, 13892, 53.7),
-        'Meghalaya': (6839, 4578, 66.9),
-        'Arunachal Pradesh': (5589, 3120, 55.8),
-        'Manipur': (2581, 2501, 96.9),
-        'Nagaland': (1428, 1390, 97.3),
-        'Tripura': (875, 291, 33.3),
-        'Mizoram': (830, 804, 96.9),
+        'Assam': (25854, 10548, 40.8),
+        'Meghalaya': (6839, 3609, 52.8),
+        'Arunachal Pradesh': (5589, 1776, 31.8),
+        'Manipur': (2581, 2230, 86.4),
+        'Nagaland': (1428, 1239, 86.8),
+        'Tripura': (875, 114, 13.0),
+        'Mizoram': (830, 613, 73.9),
     }
     for s, (rt, rr, rpct) in readme_states.items():
         actual_t = int(state_total.get(s, 0))
@@ -91,7 +91,8 @@ def test_readme_consistency():
     # ── TEST 4: Relocation priority counts (relocation_timeline) ──
     if 'relocation_timeline' in df.columns:
         reloc = df['relocation_timeline'].value_counts()
-        readme_reloc = {'IMMEDIATE': 24220, 'SHORT_TERM': 5467, 'MEDIUM_TERM': 157, 'MONITOR': 14152}
+        readme_reloc = {'IMMEDIATE': 16030, 'SHORT_TERM': 4099,
+                        'MEDIUM_TERM': 12496, 'MONITOR': 11371}
         reloc_errors = []
         for zone, count in readme_reloc.items():
             actual = int(reloc.get(zone, 0))

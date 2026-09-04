@@ -73,7 +73,7 @@ Needs **Python 3.10+** (`pip install -r requirements.txt`), **Node 18+** (only i
 Run the test suite at any time (all paths are verified against it):
 
 ```bash
-python tests/test_pipeline.py            # 285 regression assertions
+python tests/test_pipeline.py            # 290 regression assertions
 python tests/behavioral_vyoma.py         # 41 end-to-end export checks
 python tests/validate_vyoma_export.py    # 22 schema-contract checks
 python tests/test_readme_consistency.py  # 7 README-vs-data consistency checks
@@ -91,7 +91,7 @@ python tests/validate_real_world.py      # real-world sanity checks
 | 2 | **Spatial Cross-Validation** | Implemented Leave-One-State-Out (7 folds) and Leave-One-District-Out (62 folds) CV. Random CV AUC was 0.978, but spatial CV drops to 0.685 — an honest 0.293 generalization gap that reveals spatial autocorrelation inflation. All metrics reported transparently. | ✅ Done |
 | 3 | **Slope Fix** | Fixed a critical bug where `np.gradient(window, degrees)` computed slope as rise(meters)/run(degrees) instead of rise(meters)/run(meters). Slope values corrected from a median of 89.99° (broken) to 4.06° (physically plausible). Verified on 6 known-terrain villages. | ✅ Done |
 | 4 | **Carrying Capacity Assessment** | For every GREEN zone village, computes buildable land (WorldCover + slope < 15°), water capacity margin (Census water sources − population need), and infrastructure headroom (schools, hospitals, roads). Outputs estimated carrying capacity: how many additional people each village can absorb. | ✅ Done |
-| 5 | **Relocation Matching** | For every HIGH-priority RED village, finds candidate GREEN villages within 50km (configurable). Solves the assignment problem using greedy nearest-available-capacity (with LP benchmark). Capacity decreases as villages are assigned. Candidates are restricted to villages GREEN under the **canonical susceptibility model** (never relocate INTO a RED/ORANGE zone). Outputs relocation_plan.csv with 8,701 RED→GREEN assignments. | ✅ Done |
+| 5 | **Relocation Matching** | For every HIGH-priority RED village, finds candidate GREEN villages within 50km (configurable). Solves the assignment problem using greedy nearest-available-capacity (with LP benchmark). Capacity decreases as villages are assigned. Candidates are restricted to villages GREEN under the **canonical susceptibility model** (never relocate INTO a RED/ORANGE zone). Outputs relocation_plan.csv with 8,431 RED→GREEN assignments. | ✅ Done |
 | 6 | **Full-Stack Web Platform (VYOMA)** | React 18 + MapLibre dashboard with an Express + TypeScript + Prisma + PostgreSQL API. Hazard map of all 43,996 villages, village list & detail (incl. the relocation destination + distance + capacity fit), relocation-sites & priority kanban, and analytics. Performance tiers (gzip + response cache, one-fetch client-side filtering, versioned static bundles) make the first page load database-free; a top-bar **sync/refresh** button re-pulls the latest model run on demand. | ✅ Done |
 
 ---
@@ -113,22 +113,22 @@ python tests/validate_real_world.py      # real-world sanity checks
 
 ### Risk Zone Distribution
 
-> **Zone definition (canonical):** `risk_level` / `risk_score` across all public exports (including the VYOMA ingestion schema) now reflect the **leakage-free susceptibility model** (`susceptibility_risk_zone`, `susceptibility_score`), not the historical model, for methodological consistency: RED ≥ 0.7, ORANGE 0.4–0.7, GREEN < 0.4. The historical model's `predicted_risk_zone` remains available as a separate column for historically-validated comparison, and drives `relocation_timeline`.
+> **Zone definition (canonical):** `risk_level` / `risk_score` across all public exports (including the VYOMA ingestion schema) now reflect the **leakage-free susceptibility model** (`susceptibility_risk_zone`, `susceptibility_score`), not the historical model, for methodological consistency: **RED ≥ 0.9, ORANGE 0.4–0.9, GREEN < 0.4**. The RED cutoff was raised from 0.7 → 0.9 (2026-09-04) so only the most extreme hazard scores classify as RED and the ORANGE band widens — the model's score distribution is unchanged, only the label cutoffs. `relocation_timeline` (the public `relocation_priority` tier) is derived from the **same canonical score with the same cutoffs** — GREEN → MONITOR, ORANGE → MEDIUM_TERM, RED → SHORT_TERM/IMMEDIATE — so a village's priority tier can never contradict its displayed zone. The historical model's `predicted_risk_zone` uses the same numeric thresholds and remains available as a separate column for historically-validated comparison.
 
 | Zone | Villages | Percentage | Description |
 |------|----------|------------|-------------|
-| 🔴 RED | 26,576 | 60.4% | High hazard — immediate action needed |
-| 🟠 ORANGE | 6,049 | 13.7% | Medium hazard — monitor and plan |
+| 🔴 RED | 20,129 | 45.8% | High hazard — immediate action needed |
+| 🟠 ORANGE | 12,496 | 28.4% | Medium hazard — monitor and plan |
 | 🟢 GREEN | 11,371 | 25.8% | Low hazard — safe for habitation |
 
 ### Relocation Priority Distribution
 
 | Priority | Villages | Description |
 |----------|----------|-------------|
-| ⚡ IMMEDIATE | 24,220 | Highest risk, relocate first |
-| 📋 SHORT_TERM | 5,467 | Plan relocation within 1-2 years |
-| 📋 MEDIUM_TERM | 157 | Monitor and plan |
-| ✅ MONITOR | 14,152 | Low risk, routine monitoring |
+| ⚡ IMMEDIATE | 16,030 | RED (≥0.9) in a disaster zone / high density — relocate first |
+| 📋 SHORT_TERM | 4,099 | RED (≥0.9), no urgent context — relocate within 1-2 years |
+| 📋 MEDIUM_TERM | 12,496 | ORANGE (0.4–0.9) — monitor and plan |
+| ✅ MONITOR | 11,371 | GREEN (<0.4) — low risk, routine monitoring |
 
 > These are the **model CSV** values (`relocation_timeline`). In the VYOMA database/UI the seed translates them to `SHORT-TERM` / `MEDIUM-TERM` / `ROUTINE` (see [VYOMA Application](#-vyoma-application-merged-frontendbackend)).
 
@@ -144,18 +144,18 @@ python tests/validate_real_world.py      # real-world sanity checks
 
 ### Risk by State
 
-> State totals sum to the headline RED count (26,576) — both derived from `susceptibility_risk_zone` (the canonical export field).
+> State totals sum to the headline RED count (20,129) — both derived from `susceptibility_risk_zone` (the canonical export field).
 
 | State | Total Villages | RED Zone | RED % |
 |-------|---------------|----------|-------|
-| Assam | 25,854 | 13,892 | 53.7% |
-| Meghalaya | 6,839 | 4,578 | 66.9% |
-| Arunachal Pradesh | 5,589 | 3,120 | 55.8% |
-| Manipur | 2,581 | 2,501 | 96.9% |
-| Nagaland | 1,428 | 1,390 | 97.3% |
-| Tripura | 875 | 291 | 33.3% |
-| Mizoram | 830 | 804 | 96.9% |
-| **TOTAL** | **43,996** | **26,576** | **60.4%** |
+| Assam | 25,854 | 10,548 | 40.8% |
+| Meghalaya | 6,839 | 3,609 | 52.8% |
+| Arunachal Pradesh | 5,589 | 1,776 | 31.8% |
+| Manipur | 2,581 | 2,230 | 86.4% |
+| Nagaland | 1,428 | 1,239 | 86.8% |
+| Tripura | 875 | 114 | 13.0% |
+| Mizoram | 830 | 613 | 73.9% |
+| **TOTAL** | **43,996** | **20,129** | **45.8%** |
 
 ---
 
@@ -258,7 +258,7 @@ SEED_VILLAGES_FILE=vyoma_export_mizoram.json SEED_SITES_FILE=vyoma_sites_export_
 - **Task:** Binary classification — predict whether a village is in a hazard Red Zone
 - **Training samples:** 43,996 villages
 - **Validation:** 5-fold Stratified Cross-Validation (random) + Spatial CV (LOSO/LODO)
-- **Risk zones:** RED (≥0.7), ORANGE (0.4–0.7), GREEN (<0.4)
+- **Risk zones:** RED (≥0.9), ORANGE (0.4–0.9), GREEN (<0.4)  *(RED cutoff raised from 0.7 on 2026-09-04 — see [Risk Zone Distribution](#risk-zone-distribution))*
 - **Label sources:** GSI landslide inventory + EM-DAT historical disasters + DFO flood database
 
 ### Cross-Validation Results (Historical Model)
@@ -360,7 +360,7 @@ For every HIGH-priority RED village:
 - Filters by remaining carrying capacity (capacity decreases as villages are assigned)
 - Solves assignment via greedy nearest-available-capacity (with LP benchmark for comparison)
 
-Output: `data/processed/relocation_plan.csv` — **8,701 assignments** against the canonical-GREEN pool, mean distance 35.3km
+Output: `data/processed/relocation_plan.csv` — **8,431 assignments** against the canonical-GREEN pool, mean distance 35.3km
 
 ### Phase 4: Social Vulnerability & Feasibility Layer
 
@@ -554,7 +554,7 @@ Instead of one blended risk_score, outputs separate hazard scores:
 │  RED → GREEN village assignment (greedy + LP benchmark)         │
 │  Capacity-constrained: decreasing remaining capacity           │
 │  Max travel: 50km haversine (configurable)                      │
-│  Output: relocation_plan.csv (8,701 assignments)                │
+│  Output: relocation_plan.csv (8,431 assignments)                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -747,7 +747,7 @@ SIH2026/
 │   └── susceptibility_cv.png           # Spatial CV comparison plot
 │
 ├── tests/                              # End-to-end validation
-│   ├── test_pipeline.py                # 285 regression assertions (18 categories)
+│   ├── test_pipeline.py                # 290 regression assertions (18 categories)
 │   ├── behavioral_vyoma.py             # 41 end-to-end VYOMA export checks
 │   ├── validate_vyoma_export.py        # 22 schema-contract checks (18-field contract)
 │   ├── test_readme_consistency.py      # 7 README-vs-data consistency checks
@@ -797,7 +797,7 @@ Counts below are from the last full green run (Sep 2026) against the current dat
 
 | Test file | What it verifies | Checks | Status |
 |---|---|---|---|
-| `tests/test_pipeline.py` | Regression suite across 18 categories: data integrity, labels & tie-breaks, spatial/CV consistency, model artifacts, prediction-output schema, and the Phase 1-5 modules (susceptibility, carrying capacity, relocation planner, social vulnerability, hazard decomposition), slope fix, threshold logic, calibration & uncertainty bounds | 285 | ✅ 285/285 |
+| `tests/test_pipeline.py` | Regression suite across 18 categories: data integrity, labels & tie-breaks, spatial/CV consistency, model artifacts, prediction-output schema, and the Phase 1-5 modules (susceptibility, carrying capacity, relocation planner, social vulnerability, hazard decomposition), slope fix, threshold logic, calibration & uncertainty bounds | 290 | ✅ 290/290 |
 | `tests/behavioral_vyoma.py` | End-to-end export lifecycle: idempotent script re-runs, canonical susceptibility mapping, zone purity, capacity bookkeeping, relocation-plan traceability, schema contracts | 41 | ✅ 41/41 |
 | `tests/validate_vyoma_export.py` | VYOMA ingestion contract: exact field set (18 fields incl. the relocation distance/fit extensions), value types, ISO timestamps, vocabularies, dangling site references, relocation-field coherence | 22 | ✅ PASS |
 | `tests/test_readme_consistency.py` | README headline numbers vs actual pipeline output (zone distribution, per-state RED sums, priorities, hazard actions, capacity candidates) | 7 | ✅ 7/7 |
@@ -832,7 +832,7 @@ python tests/validate_real_world.py
 | Susceptibility model: zero leakage features | ✅ 59 features, 0 leakage |
 | Slope physically plausible (mean=8.92°, median=4.06°) | ✅ No villages >80° |
 | Carrying capacity: non-negative and bounded [0,1] | ✅ 14,109 candidates |
-| Relocation plan: no over-allocation | ✅ 8,701 assignments (canonical-GREEN pool) |
+| Relocation plan: no over-allocation | ✅ 8,431 assignments (canonical-GREEN pool) |
 | Social vulnerability: valid ranges [0,1] | ✅ 23,493 HIGH sensitivity |
 | Hazard decomposition: actions match dominance | ✅ Consistent (99.98%) |
 | Gandhia No.2 tie-break: resolves to RELOCATE | ✅ Conservative |
@@ -880,11 +880,11 @@ priority_level: HIGH  = priority_score ≥ quantile(0.7)  → 13,199 villages
 ```
 This field is consumed **internally** by `relocation_planner.py` to include HIGH-priority ORANGE villages as relocation sources. It is a coarse internal bucket, **not** the public relocation-urgency field. (The legacy `match_relocation_sites.py` also used it, but that matcher is superseded — see below.)
 
-**2. `relocation_timeline` (IMMEDIATE / SHORT_TERM / MEDIUM_TERM / MONITOR)** — the action-oriented field generated by `predict.py` from the historical `risk_score` plus disaster-zone / population-density context. This is the field that should map to a kanban `relocation_priority` (4 actionable tiers). Actual distribution across all 43,996 villages:
-- **IMMEDIATE:** 24,220 (55.1%) — `risk_score ≥ 0.7` AND (inside a GSI/EM-DAT disaster zone OR top-quintile population density)
-- **SHORT_TERM:** 5,467 (12.4%) — `risk_score ≥ 0.7`, not already IMMEDIATE
-- **MEDIUM_TERM:** 157 (0.4%) — `risk_score` 0.55–0.7
-- **MONITOR:** 14,152 (32.2%) — everything else
+**2. `relocation_timeline` (IMMEDIATE / SHORT_TERM / MEDIUM_TERM / MONITOR)** — the action-oriented field generated from the **canonical `susceptibility_score`** (zone-aligned: same RED ≥ 0.9 / ORANGE 0.4–0.9 / GREEN < 0.4 cutoffs as `susceptibility_risk_zone`) plus disaster-zone / population-density context for the RED tier. This is the field that maps to a kanban `relocation_priority` (4 actionable tiers). Because it shares the zone cutoffs, a village is never flagged SHORT_TERM/IMMEDIATE while its displayed `risk_level` is ORANGE/GREEN. Actual distribution across all 43,996 villages (2026-09-04 run):
+- **IMMEDIATE:** 16,030 (36.4%) — `susceptibility_score ≥ 0.9` (RED) AND inside a GSI/EM-DAT disaster zone OR top-quintile population density
+- **SHORT_TERM:** 4,099 (9.3%) — `susceptibility_score ≥ 0.9` (RED), not already IMMEDIATE
+- **MEDIUM_TERM:** 12,496 (28.4%) — ORANGE zone (`susceptibility_score` 0.4–0.9)
+- **MONITOR:** 11,371 (25.8%) — GREEN zone (`susceptibility_score < 0.4`)
 
 ### Multi-Hazard Decomposition (Phase 5)
 
@@ -1033,7 +1033,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 |------|--------|--------|
 | Phase 5 | Multi-hazard decomposition: landslide vs flood risk scores | RELOCATE=6,986 / MITIGATE=29,964 / MONITOR=7,046 |
 | Phase 4 | Social vulnerability index + updated priority scoring | 23,493 HIGH sensitivity villages |
-| Phase 3 | Relocation planner: greedy + LP assignment | 8,701 RED→GREEN assignments (canonical-GREEN pool) |
+| Phase 3 | Relocation planner: greedy + LP assignment | 8,431 RED→GREEN assignments (canonical-GREEN pool) |
 | Phase 2 | Carrying capacity assessment for GREEN zones | 14,109 candidate villages scored |
 | Phase 1 | Susceptibility model: 59 leakage-free features | Honest spatial CV: LOSO=0.685, LODO=0.770 |
 | Bugfix | Slope extraction: degree→meter projection fix | Mean slope: 83.98° → 8.92° |

@@ -344,9 +344,11 @@ def predict_all_villages(df, model, features):
     df['model_prediction'] = model.predict(X)
 
     # Classify into zones based on risk score
+    # Canonical thresholds (must match predict.py): GREEN<0.4, ORANGE 0.4-0.9,
+    # RED>=0.9 — RED cutoff raised 0.7 -> 0.9 on user request.
     df['model_risk_zone'] = 'GREEN'
-    df.loc[df['model_risk_score'] >= 0.7, 'model_risk_zone'] = 'RED'
-    df.loc[(df['model_risk_score'] >= 0.4) & (df['model_risk_score'] < 0.7), 'model_risk_zone'] = 'ORANGE'
+    df.loc[df['model_risk_score'] >= 0.9, 'model_risk_zone'] = 'RED'
+    df.loc[(df['model_risk_score'] >= 0.4) & (df['model_risk_score'] < 0.9), 'model_risk_zone'] = 'ORANGE'
 
     print("Model risk zone distribution:")
     print(df['model_risk_zone'].value_counts().to_string())
